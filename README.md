@@ -1,6 +1,6 @@
 # Spout2 to PipeWire bridge
 
-This is very WIP.
+This is very WIP. Only try this if you know what you are doing. Won't work on nvidia proprietary drivers yet either.
 
 To build:
 
