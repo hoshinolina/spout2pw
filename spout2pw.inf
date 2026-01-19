@@ -1,0 +1,23 @@
+[Version]
+Signature="$CHICAGO$"
+
+[DefaultInstall]
+CopyFiles = Spout2PwFiles
+
+[DefaultInstall.Services]
+AddService = Spout2Pw,0,Spout2PwService
+
+[Spout2PwFiles]
+spout2pw.exe,"wine\x86_64-windows\spout2pw.exe"
+spoutdxtoc.dll
+
+[DestinationDirs]
+DefaultDestDir = 11
+
+[Spout2PwService]
+Description="Spout to PipeWire bridge"
+DisplayName="Spout2Pw"
+ServiceBinary="%11%\spout2pw.exe"
+ServiceType=288
+StartType=2
+ErrorControl=1

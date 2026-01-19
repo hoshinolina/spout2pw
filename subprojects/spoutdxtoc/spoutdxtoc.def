@@ -1,0 +1,16 @@
+LIBRARY SPOUTDXTOC.DLL
+EXPORTS  
+    SpoutDXToCNewSenderNames
+    SpoutDXToCFreeSenderNames
+    SpoutDXToCGetSenderCount
+    SpoutDXToCGetSender
+    SpoutDXToCGetSenderListSimple
+    SpoutDXToCNamelistClear
+    SpoutDXToCGetSenderList
+    SpoutDXToCNewReceiver
+    SpoutDXToCFreeReceiver
+    SpoutDXToCIsConnected
+    SpoutDXToCGetSenderInfo
+    SpoutDXToCCheckTextureAccess
+    SpoutDXToCAllowTextureAccess
+    SpoutDXToCGetFrameCount

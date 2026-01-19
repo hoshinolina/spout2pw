@@ -1,0 +1,2 @@
+option('libpipewire_static_lib',
+       type : 'string')
