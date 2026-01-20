@@ -59,11 +59,13 @@ unix_inc = windows_inc
 
 wine_lib_path = [
     '/usr/lib64/wine/x86_64-windows/',
+    '/usr/lib64/wine-wow64/wine/x86_64-windows/',
     '/usr/lib/x86_64-linux-gnu/wine/x86_64-windows/',
     '/usr/lib/wine/x86_64-windows/',
 ]
 unix_lib_path = [
     '/usr/lib64/wine/x86_64-unix/',
+    '/usr/lib64/wine-wow64/wine/x86_64-unix/',
     '/usr/lib/x86_64-linux-gnu/wine/x86_64-unix/',
     '/usr/lib/wine/x86_64-unix/',
 ]

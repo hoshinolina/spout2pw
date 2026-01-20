@@ -37,3 +37,5 @@ You need to use `qpwgraph` to connect the video stream to OBS (and [obs-pwvideo]
 ## Build dependencies
 
 On Debian: `sudo apt install meson ninja-build libdbus-1-dev libwine-dev mingw-w64 libgbm-dev libdrm-dev libvulkan-dev`
+
+On Fedora: `sudo dnf install meson ninja-build dbus-devel wine-devel mingw64-gcc-c++ mesa-libgbm-devel libdrm-devel vulkan-loader-devel`
