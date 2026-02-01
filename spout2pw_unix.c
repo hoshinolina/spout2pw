@@ -68,6 +68,7 @@ struct source {
     uint32_t width;
     uint32_t height;
     bool update;
+    bool dead;
 };
 
 static NTSTATUS errno_to_status(int err) {
@@ -698,7 +699,7 @@ err_close:
 }
 
 static NTSTATUS run_source(void *args) {
-    VkResult result;
+    VkResult result = VK_SUCCESS;
 
     struct source *source = args;
     bool active = false;
@@ -880,6 +881,10 @@ static NTSTATUS run_source(void *args) {
 
     cont:
         pthread_mutex_lock(&source->lock);
+        if (result != VK_SUCCESS) {
+            ERR("Vulkan error (device lost?), stopping source permanently\n");
+            break;
+        }
     }
 
     TRACE("run_source(): exiting\n");
@@ -890,6 +895,15 @@ static NTSTATUS run_source(void *args) {
         close(source->info.dmabuf_fd);
         source->info.dmabuf_fd = -1;
     }
+
+    free_texture(source);
+    funnel_stream_stop(source->stream);
+    funnel_stream_destroy(source->stream);
+
+    source->dead = true;
+
+    while (!source->quit)
+        pthread_cond_wait(&source->cond, &source->lock);
 
     pthread_mutex_unlock(&source->lock);
     pthread_cond_destroy(&source->cond);
@@ -904,6 +918,11 @@ static NTSTATUS update_source(void *args) {
     struct source *source = params->source;
 
     pthread_mutex_lock(&source->lock);
+
+    if (source->dead) {
+        pthread_mutex_unlock(&source->lock);
+        return STATUS_NO_SUCH_DEVICE;
+    }
 
     if (source->info.dmabuf_fd != -1) {
         close(source->info.dmabuf_fd);
@@ -924,7 +943,8 @@ static NTSTATUS destroy_source(void *args) {
     pthread_mutex_lock(&source->lock);
     source->quit = true;
     pthread_cond_broadcast(&source->cond);
-    funnel_stream_skip_frame(source->stream);
+    if (!source->dead)
+        funnel_stream_skip_frame(source->stream);
     pthread_mutex_unlock(&source->lock);
 
     // Freed when the thread exits
