@@ -198,13 +198,12 @@ SPOUTDXTOC_RECEIVER *__stdcall SpoutDXToCNewReceiver(const char *SenderName) {
 void __stdcall SpoutDXToCFreeReceiver(SPOUTDXTOC_RECEIVER *self) {
     assert(self != NULL);
 
-    self->frame.CloseAccessMutex();
     self->frame.CleanupFrameCount();
+    self->frame.CloseAccessMutex();
 
     if (self->sharedTexture) {
         self->sharedTexture->Release();
         self->sharedTexture = nullptr;
-        self->dx.CloseDirectX11();
     }
 
     if (self->dx_open)
