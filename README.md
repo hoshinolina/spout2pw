@@ -1,8 +1,13 @@
 # Spout2 to PipeWire bridge
 
-This is very WIP. Only try this if you know what you are doing. Won't work on nvidia proprietary drivers yet either.
+[![Github-sponsors](https://img.shields.io/github/sponsors/hoshinolina?label=Sponsor&logo=GitHub)](https://lina.yt/sponsor)
+[![Ko-Fi](https://shields.io/badge/ko--fi-Tip-ff5f5f?logo=ko-fi)](https://lina.yt/kofi)
 
-To build:
+**If you like this, please help support me with the links above!**
+
+See the [wiki page](https://github.com/hoshinolina/spout2pw/wiki) for installation and usage instructions.
+
+## Building
 
 ```bash
 git submodule init
@@ -11,28 +16,6 @@ git submodule update
 ```
 
 This creates a package at `build/pkg`.
-
-The following steps assume you use umu-launcher and have `umu-run` setup. If you use `GAMEID` to launch your game, set that environment variable for **all** of the following steps.
-
-To install into a Proton + Proton Prefix (for example, GE-Proton10-28 here):
-
-```bash
-build/pkg/install_into_proton.sh ~/.local/share/Steam/compatibilitytools.d/GE-Proton10-28/
-```
-
-To run with steam runtime (needs hack for libgbm problem due to a [steam runtime bug](https://github.com/ValveSoftware/steam-runtime/issues/797)):
-```bash
-WINEDEBUG=+spout2pw PROTONPATH=GE-Proton GBM_BACKENDS_PATH=/run/host/usr/lib64/gbm \
-umu-run "VTube Studio/VTube Studio.exe"
-```
-
-To run without steam runtime:
-```bash
-WINEDEBUG=+spout2pw PROTONPATH=GE-Proton UMU_NO_RUNTIME=1 \
-umu-run "VTube Studio/VTube Studio.exe"
-```
-
-You need to use `qpwgraph` to connect the video stream to OBS (and [obs-pwvideo](https://github.com/hoshinolina/obs-pwvideo))!!
 
 ## Build dependencies
 
