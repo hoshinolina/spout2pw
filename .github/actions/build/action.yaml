@@ -1,0 +1,50 @@
+name: Set up and build
+description: Builds spout2pw
+inputs:
+  target:
+    description: Target architecture for dependencies
+    required: true
+  version:
+    description: Version number for build
+    required: true
+  workingDirectory:
+    description: Working directory for packaging
+    required: false
+    default: ${{ github.workspace }}
+runs:
+  using: composite
+  steps:
+    - name: Install Dependencies 🛍️
+      shell: bash
+      run: |
+        : Install Dependencies 🛍️
+        set -e
+
+        echo ::group::Install Dependencies
+        sudo apt update
+        sudo apt install ccache meson ninja-build libdbus-1-dev libwine-dev wine64-tools mingw-w64 libgbm-dev libdrm-dev libvulkan-dev zsh
+        echo ::endgroup::
+
+    - name: Run Build
+      shell: bash
+      working-directory: ${{ inputs.workingDirectory }}
+      env:
+        CCACHE_DIR: ${{ inputs.workingDirectory }}/.ccache
+      run: |
+        : Run Build
+        set -e
+
+        ./build.sh
+
+    - name: Package build
+      shell: bash
+      working-directory: ${{ inputs.workingDirectory }}
+      env:
+        CCACHE_DIR: ${{ inputs.workingDirectory }}/.ccache
+      run: |
+        : Package Build
+        set -e
+
+        mkdir release
+        mv build/pkg "spout2pw-${{ inputs.version }}"
+        tar cvzf release/"spout2pw-${{ inputs.version }}-bin".tar.gz "spout2pw-${{ inputs.version }}"

@@ -1,0 +1,91 @@
+name: Build Project
+on:
+  workflow_call:
+jobs:
+  check-event:
+    name: Check GitHub Event Data 🔎
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      version: ${{ steps.setup.outputs.version }}
+      codesign: ${{ steps.setup.outputs.codesign }}
+      notarize: ${{ steps.setup.outputs.notarize }}
+      config: ${{ steps.setup.outputs.config }}
+      commitHash: ${{ steps.setup.outputs.commitHash }}
+      pluginName: ${{ steps.setup.outputs.pluginName }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check Event Data ☑
+        id: setup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          : Check Event Data ☑
+          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
+
+          version="${GITHUB_SHA:0:9}"
+          case "${GITHUB_EVENT_NAME}" in
+            push)
+              if [[ ${GITHUB_REF_NAME} =~ [0-9]+.[0-9]+.[0-9]+(-(rc|beta).+)? ]]; then
+                version="${GITHUB_REF_NAME}"
+              fi
+              ;;
+            *) ;;
+          esac
+
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "commitHash=${GITHUB_SHA:0:9}" >> $GITHUB_OUTPUT
+
+  ubuntu-build:
+    name: Build for Ubuntu 🐧
+    strategy:
+      matrix:
+        os: [ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    needs: check-event
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set Up Environment 🔧
+        id: setup
+        run: |
+          : Set Up Environment 🔧
+          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
+
+          echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache/restore@v4
+        id: ccache-cache
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-${{ matrix.os }}-ccache-x86_64
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.os }}-ccache-x86_64
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          target: x86_64
+          version: ${{ needs.check-event.outputs.version }}
+
+      - name: Upload Artifacts 📡
+        uses: actions/upload-artifact@v4
+        with:
+          name: spout2pw-${{ needs.check-event.outputs.version }}-bin-${{ needs.check-event.outputs.commitHash }}
+          path: ${{ github.workspace }}/release/spout2pw-${{ needs.check-event.outputs.version }}-bin*.*
+
+      - uses: actions/cache/save@v4
+        if: github.event_name != 'pull_request' && steps.ccache-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-${{ matrix.os }}-ccache-x86_64
