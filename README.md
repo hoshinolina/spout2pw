@@ -37,3 +37,10 @@ You need to use `qpwgraph` to connect the video stream to OBS (and [obs-pwvideo]
 ## Build dependencies
 
 On Debian: `sudo apt install meson ninja-build libdbus-1-dev libwine-dev mingw-w64 libgbm-dev libdrm-dev libvulkan-dev`
+
+## Credits
+
+Based on a prototype by tytan652:
+
+* https://codeberg.org/tytan652/spoutdxtoc
+* https://codeberg.org/tytan652/spout2xdp
