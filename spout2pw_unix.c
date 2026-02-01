@@ -231,6 +231,15 @@ onError(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     return 0;
 }
 
+static bool getflag(const char *name) {
+    const char *val = getenv("SPOUT2PW_VALIDATION");
+
+    if (!val)
+        return false;
+
+    return !strcmp(val, "1");
+}
+
 static NTSTATUS startup(void *args) {
     struct startup_params *params = args;
 
@@ -280,10 +289,12 @@ static NTSTATUS startup(void *args) {
 
         free(layerProperties);
 
-        if (foundLayers >= sizeof(layerNames) / sizeof(const char *)) {
-            createInfo.enabledLayerCount =
-                sizeof(layerNames) / sizeof(const char *);
-            createInfo.ppEnabledLayerNames = layerNames;
+        if (getflag("SPOUT2PW_VALIDATION")) {
+            if (foundLayers >= sizeof(layerNames) / sizeof(const char *)) {
+                createInfo.enabledLayerCount =
+                    sizeof(layerNames) / sizeof(const char *);
+                createInfo.ppEnabledLayerNames = layerNames;
+            }
         }
 
         CHECK_VK_RESULT(vkCreateInstance(&createInfo, NULL, &instance)) {
