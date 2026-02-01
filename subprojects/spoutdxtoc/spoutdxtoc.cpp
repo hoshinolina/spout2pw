@@ -30,6 +30,9 @@ struct SpoutDXToCReceiver {
     spoutSenderNames sendernames;
     spoutFrameCount frame;
     spoutDirectX dx;
+
+    CRITICAL_SECTION cs;
+    bool texture_locked;
 };
 
 SPOUTDXTOC_SENDERNAMES *__stdcall SpoutDXToCNewSenderNames(void) {
@@ -183,6 +186,8 @@ bool __stdcall SpoutDXToCGetSenderList(SPOUTDXTOC_SENDERNAMES *self,
 SPOUTDXTOC_RECEIVER *__stdcall SpoutDXToCNewReceiver(const char *SenderName) {
     SPOUTDXTOC_RECEIVER *p = new SpoutDXToCReceiver();
 
+    InitializeCriticalSection(&p->cs);
+
     p->sendername = std::string(SenderName);
     p->frame.CreateAccessMutex(SenderName);
     p->frame.EnableFrameCount(SenderName);
@@ -200,6 +205,8 @@ void __stdcall SpoutDXToCFreeReceiver(SPOUTDXTOC_RECEIVER *self) {
         self->sharedTexture = nullptr;
         self->dx.CloseDirectX11();
     }
+
+    DeleteCriticalSection(&self->cs);
 
     delete self;
 }
@@ -225,6 +232,9 @@ static bool InitDXTexture(SPOUTDXTOC_RECEIVER *self, uint32_t shareHandle) {
         self->sharedTexture = nullptr;
         self->dx.CloseDirectX11();
     }
+
+    if (!shareHandle)
+        return false;
 
     const int nAdapters = self->dx.GetNumAdapters();
     for (int i = 0; i < nAdapters; i++) {
@@ -267,8 +277,19 @@ bool __stdcall SpoutDXToCGetSenderInfo(SPOUTDXTOC_RECEIVER *self,
     info->changed = false;
 
     if (self->lastShareHandle != sinfo.shareHandle) {
-        if (!InitDXTexture(self, sinfo.shareHandle))
+        EnterCriticalSection(&self->cs);
+
+        self->texture_locked = false;
+        bool success = InitDXTexture(self, sinfo.shareHandle);
+
+        LeaveCriticalSection(&self->cs);
+
+        if (!success) {
+            // Share handle might be reused, so we need to consider it always
+            // changed
+            self->lastShareHandle = 0;
             return false;
+        }
 
         self->lastShareHandle = sinfo.shareHandle;
         info->changed = true;
@@ -280,16 +301,30 @@ bool __stdcall SpoutDXToCGetSenderInfo(SPOUTDXTOC_RECEIVER *self,
 
 bool __stdcall SpoutDXToCCheckTextureAccess(SPOUTDXTOC_RECEIVER *self) {
     assert(self != NULL);
-    assert(self->sharedTexture != NULL);
+    bool ret = true;
 
-    return self->frame.CheckTextureAccess(self->sharedTexture);
+    EnterCriticalSection(&self->cs);
+
+    if (self->sharedTexture) {
+        self->texture_locked = ret =
+            self->frame.CheckTextureAccess(self->sharedTexture);
+    }
+
+    LeaveCriticalSection(&self->cs);
+    return ret;
 }
 
 bool __stdcall SpoutDXToCAllowTextureAccess(SPOUTDXTOC_RECEIVER *self) {
     assert(self != NULL);
-    assert(self->sharedTexture != NULL);
+    bool ret = true;
 
-    return self->frame.AllowTextureAccess(self->sharedTexture);
+    EnterCriticalSection(&self->cs);
+
+    if (self->sharedTexture && self->texture_locked)
+        ret = self->frame.AllowTextureAccess(self->sharedTexture);
+
+    LeaveCriticalSection(&self->cs);
+    return ret;
 }
 
 bool __stdcall SpoutDXToCGetFrameCount(SPOUTDXTOC_RECEIVER *self,

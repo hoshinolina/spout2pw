@@ -707,13 +707,13 @@ static NTSTATUS run_source(void *args) {
                     active = true;
                 }
             }
-            if (!active) {
-                TRACE("run_source(): Stop\n");
-                funnel_stream_stop(source->stream);
-                free_texture(source);
-                pthread_cond_wait(&source->cond, &source->lock);
-                continue;
-            }
+        }
+        if (!active) {
+            TRACE("run_source(): Stop\n");
+            funnel_stream_stop(source->stream);
+            free_texture(source);
+            pthread_cond_wait(&source->cond, &source->lock);
+            continue;
         }
         pthread_mutex_unlock(&source->lock);
 

@@ -170,9 +170,10 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
     ret.format = info.format;
     ret.usage = info.usage;
 
+    TRACE("Sender %dx%d fmt=%d handle=0x%lx changed=%d\n", info.width,
+          info.height, info.format, (long)(intptr_t)info.shareHandle,
+          info.changed);
     if (info.changed) {
-        TRACE("Sender %dx%d fmt=%d handle=%ld\n", info.width, info.height,
-              info.format, (long)(intptr_t)info.shareHandle);
 
         int fd;
         NTSTATUS status;
