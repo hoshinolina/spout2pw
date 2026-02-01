@@ -31,6 +31,8 @@ static SPOUTDXTOC_SENDERNAMES *spout_names = NULL;
 
 static DWORD WINAPI sendernames_thread(void *arg);
 
+static bool do_restart = false;
+
 #define IOCTL_SHARED_GPU_RESOURCE_GET_UNIX_RESOURCE                            \
     CTL_CODE(FILE_DEVICE_VIDEO, 3, METHOD_BUFFERED, FILE_READ_ACCESS)
 
@@ -135,6 +137,12 @@ static NTSTATUS WINAPI unlock_texture(void *args, ULONG size) {
     SpoutDXToCAllowTextureAccess(spout);
 
     return NtCallbackReturn(NULL, 0, STATUS_SUCCESS);
+}
+
+static void trigger_restart(void) {
+    TRACE("Restarting service due to error\n");
+    do_restart = true;
+    SetEvent(exit_event);
 }
 
 static DWORD WINAPI receiver_thread(void *arg) {
@@ -272,7 +280,12 @@ static void update_receiver(struct receiver *receiver) {
             .source = receiver->source,
             .info = new_info,
         };
-        UNIX_CALL(update_source, &params);
+        NTSTATUS ret = UNIX_CALL(update_source, &params);
+        if (ret == STATUS_NO_SUCH_DEVICE) {
+            ERR("Source '%s' had a fatal error\n", receiver->name);
+            trigger_restart();
+            return;
+        }
         receiver->info = new_info;
     }
 }
@@ -434,6 +447,8 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
 
     TRACE("Checking if spoutdxtoc.dll is not a stub\n");
 
+restart:
+
     // NOTE: There is no point continuing if it is.
     spout_names = SpoutDXToCNewSenderNames();
     if (spout_names == NULL) {
@@ -488,6 +503,11 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
 
     TRACE("Freeing sender names\n");
     SpoutDXToCFreeSenderNames(spout_names);
+
+    if (do_restart) {
+        do_restart = false;
+        goto restart;
+    }
 
 stop:
     status.dwCurrentState = SERVICE_STOPPED;
