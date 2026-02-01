@@ -57,6 +57,7 @@ setup_logging() {
 }
 
 find_gbm_backends() {
+if [ ! -d /run/host ]; then
     gbm_backends=
 
     for libdir in /usr/lib/x86_64-linux-gnu/ /usr/lib64 /lib64 /usr/lib /lib; do
@@ -71,6 +72,7 @@ find_gbm_backends() {
     fi
 
     log "GBM backend path: $gbm_backends"
+fi
 }
 
 
@@ -100,7 +102,9 @@ setup_umu() {
     fi
 
     if [ "$UMU_NO_RUNTIME" != 1 ]; then
-        export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+        if [ -d "$gbm_backends" ]; then
+            export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+        fi
     fi
 
     run_in_prefix() {
@@ -123,7 +127,9 @@ setup_steam() {
         [[ "$arg" == */proton ]] && break
     done
 
-    export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+    if [ -d "$gbm_backends" ]; then
+        export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+    fi
 
     log "Steam Proton launch command: ${launch_cmd[@]}"
 
