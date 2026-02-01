@@ -33,6 +33,7 @@ struct SpoutDXToCReceiver {
 
     CRITICAL_SECTION cs;
     bool texture_locked;
+    bool dx_open;
 };
 
 SPOUTDXTOC_SENDERNAMES *__stdcall SpoutDXToCNewSenderNames(void) {
@@ -206,6 +207,9 @@ void __stdcall SpoutDXToCFreeReceiver(SPOUTDXTOC_RECEIVER *self) {
         self->dx.CloseDirectX11();
     }
 
+    if (self->dx_open)
+        self->dx.CloseDirectX11();
+
     DeleteCriticalSection(&self->cs);
 
     delete self;
@@ -227,17 +231,36 @@ bool __stdcall SpoutDXToCIsConnected(SPOUTDXTOC_RECEIVER *self) {
 static bool InitDXTexture(SPOUTDXTOC_RECEIVER *self, uint32_t shareHandle) {
     IDXGIAdapter *pAdapter = nullptr;
 
+    SpoutLogNotice("InitDXTexture %x", shareHandle);
+
     if (self->sharedTexture) {
         self->sharedTexture->Release();
         self->sharedTexture = nullptr;
-        self->dx.CloseDirectX11();
     }
 
     if (!shareHandle)
         return false;
 
+    if (self->dx_open) {
+        SpoutLogNotice(
+            "Importing texture 0x%lx into existing DX adapter (index=%d)",
+            shareHandle, self->lastAdapterId);
+        // Try to open the share handle with the same device
+        if (self->dx.OpenDX11shareHandle(self->dx.GetDX11Device(),
+                                         &self->sharedTexture,
+                                         LongToHandle((long)shareHandle)))
+            return true;
+
+        SpoutLogNotice("Import failed");
+        return false;
+    }
+
+    // First time
+    SpoutLogNotice("Importing texture 0x%lx, trying all adapters", shareHandle);
+
     const int nAdapters = self->dx.GetNumAdapters();
     for (int i = 0; i < nAdapters; i++) {
+        SpoutLogNotice("Trying adapter %d", i);
         if (!self->dx.SetAdapter(i))
             continue;
 
@@ -251,11 +274,15 @@ static bool InitDXTexture(SPOUTDXTOC_RECEIVER *self, uint32_t shareHandle) {
                                          &self->sharedTexture,
                                          LongToHandle((long)shareHandle))) {
             self->lastAdapterId = i;
+            self->dx_open = true;
+            SpoutLogNotice("Texture import succeeded");
             return true;
         }
 
         self->dx.CloseDirectX11();
     }
+
+    SpoutLogError("All adapters failed to import the texture");
 
     return false;
 }
@@ -277,23 +304,34 @@ bool __stdcall SpoutDXToCGetSenderInfo(SPOUTDXTOC_RECEIVER *self,
     info->changed = false;
 
     if (self->lastShareHandle != sinfo.shareHandle) {
+        // Just free the existing texture, defer creating the new one to
+        // SpoutDXToCUpdateDXTexture() to work around a race
         EnterCriticalSection(&self->cs);
-
         self->texture_locked = false;
-        bool success = InitDXTexture(self, sinfo.shareHandle);
-
+        InitDXTexture(self, 0);
         LeaveCriticalSection(&self->cs);
-
-        if (!success) {
-            // Share handle might be reused, so we need to consider it always
-            // changed
-            self->lastShareHandle = 0;
-            return false;
-        }
-
-        self->lastShareHandle = sinfo.shareHandle;
+        self->lastShareHandle = 0;
         info->changed = true;
     }
+
+    return true;
+}
+
+bool SpoutDXToCUpdateDXTexture(SPOUTDXTOC_RECEIVER *self,
+                               SPOUTDXTOC_SENDERINFO *info) {
+
+    EnterCriticalSection(&self->cs);
+
+    self->lastShareHandle = 0;
+    self->texture_locked = false;
+    bool success = InitDXTexture(self, HandleToLong(info->shareHandle));
+
+    LeaveCriticalSection(&self->cs);
+
+    if (!success)
+        return false;
+
+    self->lastShareHandle = HandleToLong(info->shareHandle);
     info->adapterId = self->lastAdapterId;
 
     return true;

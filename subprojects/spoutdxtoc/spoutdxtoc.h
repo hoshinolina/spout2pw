@@ -55,6 +55,8 @@ void SpoutDXToCFreeReceiver(SPOUTDXTOC_RECEIVER *self);
 bool SpoutDXToCIsConnected(SPOUTDXTOC_RECEIVER *self);
 bool SpoutDXToCGetSenderInfo(SPOUTDXTOC_RECEIVER *self,
                              SPOUTDXTOC_SENDERINFO *info);
+bool SpoutDXToCUpdateDXTexture(SPOUTDXTOC_RECEIVER *self,
+                               SPOUTDXTOC_SENDERINFO *info);
 bool SpoutDXToCCheckTextureAccess(SPOUTDXTOC_RECEIVER *self);
 bool SpoutDXToCAllowTextureAccess(SPOUTDXTOC_RECEIVER *self);
 bool SpoutDXToCGetFrameCount(SPOUTDXTOC_RECEIVER *self, uint64_t *framecount);

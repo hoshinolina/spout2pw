@@ -43,6 +43,7 @@ struct receiver {
     SPOUTDXTOC_RECEIVER *spout;
     HANDLE thread;
     struct source_info info;
+    bool force_update;
 };
 
 struct receiver **receivers;
@@ -165,15 +166,14 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
         return ret;
     }
 
-    ret.width = info.width;
-    ret.height = info.height;
-    ret.format = info.format;
-    ret.usage = info.usage;
+    HANDLE share_handle = info.shareHandle;
 
     TRACE("Sender %dx%d fmt=%d handle=0x%lx changed=%d\n", info.width,
           info.height, info.format, (long)(intptr_t)info.shareHandle,
           info.changed);
-    if (info.changed) {
+
+    if (info.changed || receiver->force_update) {
+        receiver->force_update = true;
 
         int fd;
         NTSTATUS status;
@@ -182,7 +182,30 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
         HANDLE memhandle = open_shared_resource(info.shareHandle);
         if (memhandle == INVALID_HANDLE_VALUE) {
             ret.flags |= RECEIVER_TEXTURE_INVALID;
-            TRACE("-> kmt handle failed\n");
+            WARN("Share handle open failed\n");
+            return ret;
+        }
+
+        TRACE("Share handle opened: 0x%lx -> 0x%lx\n",
+              HandleToLong(share_handle), HandleToLong(memhandle));
+
+        Sleep(100);
+
+        if (!SpoutDXToCGetSenderInfo(spout, &info) ||
+            info.shareHandle != share_handle) {
+            WARN("Texture changed out under us, trying again later (0x%lx -> "
+                 "0x%lx)\n",
+                 HandleToLong(share_handle), HandleToLong(info.shareHandle));
+            ret.flags |= RECEIVER_TEXTURE_INVALID;
+            NtClose(memhandle);
+            return ret;
+        }
+
+        WARN("Update DX Texture\n");
+        if (!SpoutDXToCUpdateDXTexture(spout, &info)) {
+            WARN("Failed to update DX texture\n");
+            ret.flags |= RECEIVER_TEXTURE_INVALID;
+            NtClose(memhandle);
             return ret;
         }
 
@@ -210,7 +233,13 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
 
         ret.dmabuf_fd = fd;
         ret.flags |= RECEIVER_TEXTURE_UPDATED;
+        receiver->force_update = false;
     }
+
+    ret.width = info.width;
+    ret.height = info.height;
+    ret.format = info.format;
+    ret.usage = info.usage;
 
     return ret;
 }
