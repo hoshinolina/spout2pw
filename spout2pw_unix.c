@@ -572,6 +572,8 @@ static void free_texture(struct source *source) {
         close(source->cur_fd);
         source->cur_fd = -1;
     }
+
+    TRACE("Texture freed\n");
 }
 
 static VkFormat dx_to_vkformat(uint32_t format) {
@@ -928,6 +930,8 @@ static NTSTATUS run_source(void *args) {
     pthread_cond_destroy(&source->cond);
     pthread_mutex_destroy(&source->lock);
     free(source);
+
+    TRACE("run_source(): exit\n");
 
     return STATUS_SUCCESS;
 }

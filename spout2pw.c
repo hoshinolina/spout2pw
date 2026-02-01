@@ -197,7 +197,7 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
         TRACE("Share handle opened: 0x%lx -> 0x%lx\n",
               HandleToLong(share_handle), HandleToLong(memhandle));
 
-        Sleep(100);
+        Sleep(50);
 
         if (!SpoutDXToCGetSenderInfo(spout, &info) ||
             info.shareHandle != share_handle) {
@@ -323,12 +323,15 @@ static void add_receiver(const char *name) {
 }
 
 static void remove_receiver(struct receiver *receiver) {
+    TRACE("Destroying source %s\n", receiver->name);
     if (receiver->source)
         UNIX_CALL(destroy_source, receiver->source);
 
+    TRACE("Joining thread for %s\n", receiver->name);
     if (receiver->thread)
         WaitForSingleObject(receiver->thread, INFINITE);
 
+    TRACE("Freeing receiver for %s\n", receiver->name);
     SpoutDXToCFreeReceiver(receiver->spout);
 
     for (uint32_t i = 0; i < num_receivers; i++) {
@@ -342,6 +345,7 @@ static void remove_receiver(struct receiver *receiver) {
     ERR("Did not find receiver %p (%s)\n", receiver, receiver->name);
 
 free:
+    TRACE("Done removing %s\n", receiver->name);
     free(receiver->name);
     free(receiver);
 }
