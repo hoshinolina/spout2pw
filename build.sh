@@ -57,7 +57,7 @@ EOF
 
 meson setup \
     --native-file "$builddir/native.txt" \
-    --cross-file "$base"/x86_64-w64-mingw32.txt \
+    --cross-file "$base"/misc/x86_64-w64-mingw32.txt \
     -Dlibpipewire_static_lib="$builddir/prefix/usr/lib/libpipewire-static-0.3.a" \
     "$builddir" "$base"
 

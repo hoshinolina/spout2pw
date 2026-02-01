@@ -68,11 +68,11 @@ funnel = libfunnel_proj.get_variable('funnel')
 funnel_vk = libfunnel_proj.get_variable('funnel_vk')
 
 windows_src = [
-  'spout2pw.c',
+  'src/spout2pw.c',
 ]
 
 unix_src = [
-  'spout2pw_unix.c',
+  'src/spout2pw_unix.c',
 ]
 
 windows_compiler_args = [
@@ -133,4 +133,4 @@ unixlib = shared_library(
 
 fs = import('fs')
 
-meson.add_install_script('package.sh')
+meson.add_install_script('tools/package.sh')
