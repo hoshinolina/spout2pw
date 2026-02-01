@@ -58,7 +58,6 @@ struct source {
     VkCommandBuffer commandBuffer;
     VkDeviceMemory mem;
     VkImage image;
-    VkFence fence;
 
     pthread_mutex_t lock;
     pthread_cond_t cond;
@@ -479,19 +478,10 @@ static NTSTATUS create_source(void *args) {
         goto free_source;
     }
 
-    VkFenceCreateInfo createInfo = {0};
-    createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    CHECK_VK_RESULT(vkCreateFence(device, &createInfo, NULL, &source->fence)) {
-        ret = -EIO;
-        goto free_cmdbufs;
-    }
-
     ret = funnel_stream_create(funnel, params->sender_name, &stream);
     if (ret) {
         ERR("Failed to create libfunnel stream\n");
-        goto free_fence;
+        goto free_cmdbufs;
     }
 
     ret = funnel_stream_init_vulkan(stream, instance, physDevice, device);
@@ -545,8 +535,6 @@ static NTSTATUS create_source(void *args) {
 
 free_stream:
     funnel_stream_destroy(stream);
-free_fence:
-    vkDestroyFence(device, source->fence, NULL);
 free_cmdbufs:
     vkFreeCommandBuffers(device, commandPool, 1, &source->commandBuffer);
 free_source:
@@ -706,6 +694,11 @@ static NTSTATUS run_source(void *args) {
                         ERR("Failed to set size\n");
                         continue;
                     }
+                    ret = funnel_stream_configure(source->stream);
+                    if (ret) {
+                        ERR("Failed to configure stream\n");
+                        continue;
+                    }
                     ret = funnel_stream_start(source->stream);
                     if (ret) {
                         ERR("Failed to start stream\n");
@@ -728,11 +721,11 @@ static NTSTATUS run_source(void *args) {
 
         struct funnel_buffer *buf = NULL;
         ret = funnel_stream_dequeue(source->stream, &buf);
-        if (ret) {
+        if (ret < 0) {
             ERR("Buffer dequeue failed: %d\n", ret);
             goto cont;
         }
-        if (!buf) {
+        if (ret == 0) {
             TRACE("No buffer\n");
             goto cont;
         }
@@ -749,6 +742,14 @@ static NTSTATUS run_source(void *args) {
         ret = funnel_buffer_get_vk_semaphores(buf, &acquire, &release);
         if (ret) {
             ERR("Failed to get semaphores: %d\n", ret);
+            funnel_stream_return(source->stream, buf);
+            goto cont;
+        }
+
+        VkFence fence;
+        ret = funnel_buffer_get_vk_fence(buf, &fence);
+        if (ret) {
+            ERR("Failed to get fence: %d\n", ret);
             funnel_stream_return(source->stream, buf);
             goto cont;
         }
@@ -824,20 +825,19 @@ static NTSTATUS run_source(void *args) {
             goto cont;
         }
 
-        CHECK_VK_RESULT(vkResetFences(device, 1, &source->fence));
-
-        CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, source->fence)) {
+        CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence)) {
             unlock_texture(source->receiver);
             funnel_stream_return(source->stream, buf);
             goto cont;
         }
 
         ret = funnel_stream_enqueue(source->stream, buf);
-        if (ret < 0)
+        if (ret < 0) {
             ERR("Enqueue failed: %d\n", ret);
+            funnel_stream_return(source->stream, buf);
+        }
 
-        CHECK_VK_RESULT(
-            vkWaitForFences(device, 1, &source->fence, 1, UINT64_MAX));
+        CHECK_VK_RESULT(vkQueueWaitIdle(queue)) {}
 
         unlock_texture(source->receiver);
 
