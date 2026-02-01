@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -63,6 +64,9 @@ struct source {
     pthread_cond_t cond;
     bool quit;
     struct source_info info;
+    int cur_fd;
+    uint32_t width;
+    uint32_t height;
     bool update;
 };
 
@@ -543,12 +547,19 @@ free_source:
 }
 
 static void free_texture(struct source *source) {
+    TRACE("Freeing texture\n");
+
     if (source->image != VK_NULL_HANDLE)
         vkDestroyImage(device, source->image, NULL);
     source->image = VK_NULL_HANDLE;
     if (source->mem != VK_NULL_HANDLE)
         vkFreeMemory(device, source->mem, NULL);
     source->mem = VK_NULL_HANDLE;
+
+    if (source->cur_fd != -1) {
+        close(source->cur_fd);
+        source->cur_fd = -1;
+    }
 }
 
 static VkFormat dx_to_vkformat(uint32_t format) {
@@ -584,9 +595,25 @@ static VkFormat dx_to_vkformat(uint32_t format) {
 
 static int import_texture(struct source *source) {
     VkResult result;
+    int fd = -1;
 
     if (source->info.dmabuf_fd < 0)
         return -EINVAL;
+
+    if (source->cur_fd != -1) {
+        close(source->cur_fd);
+        source->cur_fd = -1;
+    }
+
+    fd = fcntl(source->info.dmabuf_fd, F_DUPFD_CLOEXEC, 3);
+    if (fd < 0)
+        return -EINVAL;
+
+    source->cur_fd = source->info.dmabuf_fd;
+    source->info.dmabuf_fd = -1;
+
+    TRACE("Importing DMA-BUF FD %d -> %d (%dx%d)\n", source->cur_fd, fd,
+          source->info.width, source->info.height);
 
     VkFormat format = dx_to_vkformat(source->info.format);
     if (format == VK_FORMAT_UNDEFINED)
@@ -635,7 +662,7 @@ static int import_texture(struct source *source) {
 
     VkImportMemoryFdInfoKHR memory_fd_info = {
         .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
-        .fd = source->info.dmabuf_fd,
+        .fd = fd,
         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT,
     };
 
@@ -651,17 +678,22 @@ static int import_texture(struct source *source) {
         vkAllocateMemory(device, &allocate_info, NULL, &source->mem)) {
         goto err_close;
     }
-
-    source->info.dmabuf_fd = -1;
+    fd = -1;
 
     CHECK_VK_RESULT(vkBindImageMemory(device, source->image, source->mem, 0)) {
         return -EINVAL;
     }
+
+    TRACE("Texture import OK\n");
+
     return 0;
 
 err_close:
-    close(source->info.dmabuf_fd);
-    source->info.dmabuf_fd = -1;
+    if (source->cur_fd != -1)
+        close(source->cur_fd);
+    source->cur_fd = -1;
+    if (fd != -1)
+        close(fd);
     return -EINVAL;
 }
 
@@ -678,7 +710,7 @@ static NTSTATUS run_source(void *args) {
     while (!source->quit) {
         TRACE("run_source(): Iterate\n");
         if (source->update) {
-            TRACE("run_source(): Update\n");
+            TRACE("run_source(): Update flags=%d\n", source->info.flags);
             source->update = false;
             if (source->info.flags &
                 (RECEIVER_DISCONNECTED | RECEIVER_TEXTURE_INVALID)) {
@@ -704,7 +736,12 @@ static NTSTATUS run_source(void *args) {
                         ERR("Failed to start stream\n");
                         continue;
                     }
+                    source->width = source->info.width;
+                    source->height = source->info.height;
                     active = true;
+                } else {
+                    ERR("Texture import failed, stopping stream\n");
+                    active = false;
                 }
             }
         }
@@ -732,7 +769,7 @@ static NTSTATUS run_source(void *args) {
 
         uint32_t bwidth, bheight;
         funnel_buffer_get_size(buf, &bwidth, &bheight);
-        if (bwidth != source->info.width || bheight != source->info.height) {
+        if (bwidth != source->width || bheight != source->height) {
             TRACE("Dimensions mismatch, skipping buffer\n");
             funnel_stream_return(source->stream, buf);
             goto cont;

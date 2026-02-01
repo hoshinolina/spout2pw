@@ -228,7 +228,7 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
         }
 
         status = wine_server_handle_to_fd(wine_server_ptr_handle(unix_resource),
-                                          FILE_READ_DATA, &fd, NULL);
+                                          GENERIC_ALL, &fd, NULL);
         NtClose(wine_server_ptr_handle(unix_resource));
         NtClose(memhandle);
         if (status != STATUS_SUCCESS) {
@@ -275,7 +275,8 @@ static void update_receiver(struct receiver *receiver) {
         return;
     }
 
-    if (new_info.flags != receiver->info.flags) {
+    if (new_info.flags != receiver->info.flags ||
+        (new_info.flags & RECEIVER_TEXTURE_UPDATED)) {
         struct update_source_params params = {
             .source = receiver->source,
             .info = new_info,
