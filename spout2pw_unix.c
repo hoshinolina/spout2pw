@@ -546,6 +546,7 @@ static NTSTATUS create_source(void *args) {
     source->update = true; /// Initial update
     source->info = params->info;
     source->receiver = params->receiver;
+    source->cur_fd = -1;
     params->ret_source = source;
     return STATUS_SUCCESS;
 
