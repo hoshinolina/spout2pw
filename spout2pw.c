@@ -108,13 +108,11 @@ static HANDLE open_shared_resource(HANDLE kmt_handle) {
     return shared_resource;
 }
 
-static NTSTATUS WINAPI lock_texture(void *args, ULONG size)
-{
+static NTSTATUS WINAPI lock_texture(void *args, ULONG size) {
     struct receiver_params *params = args;
-    ERR("args=%p\n", args);
     struct receiver *receiver = params->receiver;
     SPOUTDXTOC_RECEIVER *recv = receiver->spout;
-    struct lock_texture_return ret = { .retval = 0 };
+    struct lock_texture_return ret = {.retval = 0};
 
     if (!SpoutDXToCCheckTextureAccess(recv)) {
         ERR("Failed to lock shared texture\n");
@@ -125,18 +123,17 @@ static NTSTATUS WINAPI lock_texture(void *args, ULONG size)
         }
     }
 
-    return NtCallbackReturn( &ret, sizeof(ret), STATUS_SUCCESS );
+    return NtCallbackReturn(&ret, sizeof(ret), STATUS_SUCCESS);
 }
 
-static NTSTATUS WINAPI unlock_texture(void *args, ULONG size)
-{
+static NTSTATUS WINAPI unlock_texture(void *args, ULONG size) {
     struct receiver_params *params = args;
     struct receiver *receiver = params->receiver;
     SPOUTDXTOC_RECEIVER *spout = receiver->spout;
 
     SpoutDXToCAllowTextureAccess(spout);
 
-    return NtCallbackReturn( NULL, 0, STATUS_SUCCESS );
+    return NtCallbackReturn(NULL, 0, STATUS_SUCCESS);
 }
 
 static DWORD WINAPI receiver_thread(void *arg) {
@@ -194,14 +191,14 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
                                   sizeof(unix_resource))) {
             ret.flags |= RECEIVER_TEXTURE_INVALID;
             TRACE("-> kmt handle failed\n");
-	    NtClose(memhandle);
+            NtClose(memhandle);
             return ret;
         }
 
         status = wine_server_handle_to_fd(wine_server_ptr_handle(unix_resource),
                                           FILE_READ_DATA, &fd, NULL);
         NtClose(wine_server_ptr_handle(unix_resource));
-	NtClose(memhandle);
+        NtClose(memhandle);
         if (status != STATUS_SUCCESS) {
             ret.flags |= RECEIVER_TEXTURE_INVALID;
             TRACE("-> failed to convert handle to fd\n");

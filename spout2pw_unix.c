@@ -565,12 +565,12 @@ static VkFormat dx_to_vkformat(uint32_t format) {
     case DXGI_FORMAT_R10G10B10A2_UNORM:
         return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
     case DXGI_FORMAT_R8G8B8A8_UNORM:
-        //return VK_FORMAT_R8G8B8A8_UNORM;
+        // return VK_FORMAT_R8G8B8A8_UNORM;
         return VK_FORMAT_R8G8B8A8_SRGB;
     case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
         return VK_FORMAT_R8G8B8A8_SRGB;
     case DXGI_FORMAT_R8G8B8A8_SNORM:
-        //return VK_FORMAT_R8G8B8A8_SNORM;
+        // return VK_FORMAT_R8G8B8A8_SNORM;
         return VK_FORMAT_R8G8B8A8_SRGB;
     case DXGI_FORMAT_B8G8R8A8_UNORM:
         return VK_FORMAT_B8G8R8A8_SRGB;
