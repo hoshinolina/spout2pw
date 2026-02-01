@@ -30,7 +30,7 @@ endif
 
 message('Checking wine PE include paths...')
 r = run_command(join_paths(meson.project_source_root(), 'tools/get_wine_path.sh'),
-    'x86_64-w64-mingw32', '^-i', check: true)
+    'x86_64-w64-mingw32', '^-i(system|dirafter)/', check: true)
 wine_include_args = r.stdout().strip().split('\n')
 if wine_include_args.length() > 0
     message('Wine PE include args: ' + ' '.join(wine_include_args))
@@ -40,7 +40,7 @@ endif
 
 message('Checking wine UNIX include paths...')
 r = run_command(join_paths(meson.project_source_root(), 'tools/get_wine_path.sh'),
-    '', '^-i', check: true)
+    '', '^-i(system|dirafter)/', check: true)
 unix_include_args = r.stdout().strip().split('\n')
 if unix_include_args.length() > 0
     message('Wine UNIX include args: ' + ' '.join(unix_include_args))

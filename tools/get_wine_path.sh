@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 cd "$MESON_BUILD_ROOT"
@@ -11,4 +11,4 @@ target="$1"
 grep="$2"
 
 winegcc -v ${target:+-b}$target -o winegcc_test.exe winegcc_test.c &>winegcc_output.txt
-cat winegcc_output.txt | sed 's/ /\n/g' | grep "$grep"
+cat winegcc_output.txt | sed 's/ /\n/g' | grep -E "$grep"
