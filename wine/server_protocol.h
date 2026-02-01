@@ -340,7 +340,7 @@ union hw_input
         unsigned int   msg;
         lparam_t       wparam;
         lparam_t       lparam;
-        struct hid_input hid;
+        //struct hid_input hid;
     } hw;
 };
 

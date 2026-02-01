@@ -10,6 +10,27 @@
 #include <ntuser.h>
 #include "wine/unixlib.h"
 
+// Wine 9.0 build compat (Build only! This will not work with wine 9.0 at runtime!)
+#ifndef ALL_USER32_CALLBACKS
+#define NtUserCallDispatchCallback 0
+
+/* NtUserCallDispatchCallback params */
+struct dispatch_callback_params
+{
+    UINT64 callback;
+};
+
+NTSYSAPI NTSTATUS KeUserModeCallback( ULONG id, const void *args, ULONG len, void **ret_ptr, ULONG *ret_len );
+
+static inline NTSTATUS KeUserDispatchCallback( const struct dispatch_callback_params *params, ULONG len,
+                                               void **ret_ptr, ULONG *ret_len )
+{
+    if (!params->callback) return STATUS_ENTRYPOINT_NOT_FOUND;
+    return KeUserModeCallback( NtUserCallDispatchCallback, params, len, ret_ptr, ret_len );
+}
+
+#endif
+
 struct receiver_params
 {
     struct dispatch_callback_params dispatch;
