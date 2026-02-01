@@ -874,11 +874,15 @@ static NTSTATUS run_source(void *args) {
             goto cont;
         }
 
+        TRACE("run_source(): Submitting\n");
+
         CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence)) {
             unlock_texture(source->receiver);
             funnel_stream_return(source->stream, buf);
             goto cont;
         }
+
+        TRACE("run_source(): Enqueueing\n");
 
         ret = funnel_stream_enqueue(source->stream, buf);
         if (ret < 0) {
@@ -886,7 +890,11 @@ static NTSTATUS run_source(void *args) {
             funnel_stream_return(source->stream, buf);
         }
 
+        TRACE("run_source(): Wait for idle\n");
+
         CHECK_VK_RESULT(vkQueueWaitIdle(queue)) {}
+
+        TRACE("run_source(): Unlock\n");
 
         unlock_texture(source->receiver);
 
