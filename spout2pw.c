@@ -1,6 +1,10 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
+#include <wchar.h>
 
 #include "spout2pw_unix.h"
 
@@ -371,7 +375,7 @@ static DWORD WINAPI service_handler(DWORD ctrl, DWORD event_type,
         return NO_ERROR;
 
     default:
-        FIXME("Got service ctrl %lx\n", ctrl);
+        FIXME("Got service ctrl %lx\n", (long)ctrl);
         status.dwCurrentState = SERVICE_RUNNING;
         SetServiceStatus(service_handle, &status);
         return NO_ERROR;
@@ -391,13 +395,13 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
 
     ret = __wine_init_unix_call();
     if (ret != STATUS_SUCCESS) {
-        ERR("Failed to init unix calls error %lx\n", ret);
+        ERR("Failed to init unix calls error %lx\n", (long)ret);
         goto stop;
     }
 
     ret = UNIX_CALL(libs_init, NULL);
     if (ret != STATUS_SUCCESS) {
-        ERR("Failed to init unix libs error %lx\n", ret);
+        ERR("Failed to init unix libs error %lx\n", (long)ret);
         goto stop;
     }
 
@@ -419,7 +423,7 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
 
     ret = UNIX_CALL(startup, &params);
     if (ret != STATUS_SUCCESS) {
-        ERR("Failed to init libfunnel error %lx\n", ret);
+        ERR("Failed to init libfunnel error %lx\n", (long)ret);
         goto stop;
     }
 
