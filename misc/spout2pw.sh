@@ -100,7 +100,7 @@ setup_umu() {
     fi
 
     if [ "$UMU_NO_RUNTIME" != 1 ]; then
-           export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+        export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
     fi
 
     run_in_prefix() {
