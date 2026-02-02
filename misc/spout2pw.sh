@@ -261,13 +261,12 @@ main() {
     prepare_prefix
     setup_env
 
-    "$@"
-    return $?
+    "$@" || ret="$?"
+    log "Command exit status: $ret"
+    exit $ret
 }
 
 main "$@"
 ret="$?"
 [ "$ret" != 0 ] && fatal "Unknown error $ret, see terminal log"
-
-exit "$ret"
 
