@@ -207,7 +207,7 @@ prepare_prefix() {
     fi
 
     show_info "Installing/updating Spout2PW into Wine prefix..."
-    run_in_prefix rundll32 setupapi.dll,InstallHinfSection DefaultInstall 128 "$spout2pw/spout2pw.inf"
+    run_in_prefix cmd /c "rundll32 setupapi.dll,InstallHinfSection DefaultInstall 128 Z:${spout2pw//\//\\}\\spout2pw.inf"
 
     if check_spout2pw_install; then
         show_info "Installation successful"
