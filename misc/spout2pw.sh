@@ -56,10 +56,27 @@ setup_logging() {
     trap 'fatal "Unexpected error on line $LINENO"' ERR
 }
 
+check_environment() {
+    flatpak=0
+
+    if [ -e /.flatpak-info ]; then
+        flatpak=1
+    fi
+}
+
 find_gbm_backends() {
+    gbm_backend_paths="
+        /usr/lib/x86_64-linux-gnu/GL/lib
+        /usr/lib/x86_64-linux-gnu
+        /usr/lib64
+        /lib64
+        /usr/lib
+        /lib
+    "
+
     gbm_backends=
 
-    for libdir in /usr/lib/x86_64-linux-gnu/ /usr/lib64 /lib64 /usr/lib /lib; do
+    for libdir in $gbm_backend_paths; do
         if [ -d "$libdir"/gbm ]; then
             gbm_backends=$libdir/gbm
             break
@@ -87,7 +104,11 @@ gbm_steamrt_workaround() {
         base="$(basename "$i")"
         log "Staging GBM backend $base:"
         rp="$(realpath "$i")"
-        src="/run/host$rp"
+        if [ "$flatpak" = 1 ]; then
+            src="/run/parent$rp"
+        else
+            src="/run/host$rp"
+        fi
         dst="$gbm_staging/$base"
         log "  Linking $dst -> $src"
         ln -s "$src" "$dst"
@@ -139,13 +160,23 @@ setup_steam() {
     protonpath="$(echo "$STEAM_COMPAT_TOOL_PATHS" | cut -d: -f1)"
 
     launch_cmd=()
+    steam_runtime=0
     for arg in "$@"; do
+        log "Arg: $arg"
         launch_cmd+=("$arg")
 
+        [[ "$arg" == *SteamLinuxRuntime* ]] && steam_runtime=1
         [[ "$arg" == */proton ]] && break
     done
 
-    if [[ ! "$1" == */proton ]]; then
+    log "Steam launch mode: flatpak=$flatpak steam_runtime=$steam_runtime"
+
+    if [ "$flatpak" = 1 ]; then
+        log "Working around Flatpak Steam LD_AUDIT issue"
+        unset LD_AUDIT
+    fi
+
+    if [[ ! "$1" == */proton ]] && [ "$steam_runtime" = 1 ]; then
         gbm_steamrt_workaround
     fi
 
@@ -198,6 +229,11 @@ check_spout2pw_install() {
     check_file "$spout2pw/spoutdxtoc.dll" "$system32/spoutdxtoc.dll" || return 1
     check_file "$spout2pw/wine/x86_64-windows/spout2pw.exe" "$system32/spout2pw.exe" || return 1
 
+    log "Checking for service"
+    if ! grep -q 'Services\\\\Spout2Pw' $wineprefix/system.reg; then
+        log "Service is missing"
+        return 1
+    fi
 }
 
 prepare_prefix() {
@@ -256,6 +292,8 @@ setup_env() {
 
 main() {
     setup_logging
+
+    check_environment
     find_gbm_backends
 
     verb="$1"
