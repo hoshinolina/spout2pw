@@ -228,6 +228,12 @@ check_spout2pw_install() {
 
     check_file "$spout2pw/spoutdxtoc.dll" "$system32/spoutdxtoc.dll" || return 1
     check_file "$spout2pw/wine/x86_64-windows/spout2pw.exe" "$system32/spout2pw.exe" || return 1
+
+    log "Checking for service"
+    if ! grep -q 'Services\\\\Spout2Pw' $wineprefix/system.reg; then
+        log "Service is missing"
+        return 1
+    fi
 }
 
 prepare_prefix() {
