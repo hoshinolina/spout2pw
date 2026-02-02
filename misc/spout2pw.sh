@@ -145,7 +145,9 @@ setup_steam() {
         [[ "$arg" == */proton ]] && break
     done
 
-    gbm_steamrt_workaround
+    if [[ ! "$1" == */proton ]]; then
+        gbm_steamrt_workaround
+    fi
 
     log "Steam Proton launch command: ${launch_cmd[@]}"
 
@@ -245,7 +247,7 @@ main() {
         wine|/*/wine|wine|/*/wine)
             setup_wine "$@"
         ;;
-        */steam-launch-wrapper)
+        */steam-launch-wrapper|*/proton)
             setup_steam "$@"
         ;;
         "")
