@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -E
 
 spout2pw="$(realpath "$(dirname "$0")")"
 
@@ -57,7 +57,7 @@ setup_logging() {
 }
 
 find_gbm_backends() {
-if [ ! -d /run/host ]; then
+    [ "$container" == "flatpak" ] && return 0;
     gbm_backends=
 
     for libdir in /usr/lib/x86_64-linux-gnu/ /usr/lib64 /lib64 /usr/lib /lib; do
@@ -72,9 +72,31 @@ if [ ! -d /run/host ]; then
     fi
 
     log "GBM backend path: $gbm_backends"
-fi
 }
 
+gbm_steamrt_workaround() {
+    [ "$container" == "flatpak" ] && return 0;
+    log "Staging GBM backends to work around Steam Runtime bug"
+    gbm_staging="$(mktemp --tmpdir=/tmp -d spout2pw-gbm.XXXXXXXXXX)"
+    [ ! -d "$gbm_staging" ] && fatal "Failed to create staging directory for GBM backends"
+    gbm_staging="$(realpath "$gbm_staging")"
+
+    log "GBM backend staging path: $gbm_staging"
+
+    trap "rm -vrf $gbm_staging" 1 2 3 6 15 EXIT
+
+    for i in $gbm_backends/*; do
+        base="$(basename "$i")"
+        log "Staging GBM backend $base:"
+        rp="$(realpath "$i")"
+        src="/run/host$rp"
+        dst="$gbm_staging/$base"
+        log "  Linking $dst -> $src"
+        ln -s "$src" "$dst"
+    done
+
+    export GBM_BACKENDS_PATH="$gbm_staging"
+}
 
 setup_wine() {
     fatal "Vanilla wine is not supported yet!"
@@ -102,9 +124,7 @@ setup_umu() {
     fi
 
     if [ "$UMU_NO_RUNTIME" != 1 ]; then
-        if [ -d "$gbm_backends" ]; then
-            export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
-        fi
+        gbm_steamrt_workaround
     fi
 
     run_in_prefix() {
@@ -127,8 +147,9 @@ setup_steam() {
         [[ "$arg" == */proton ]] && break
     done
 
-    if [ -d "$gbm_backends" ]; then
-        export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+    if [[ ! "$1" == */proton ]]; then
+        gbm_steamrt_workaround
+
     fi
 
     log "Steam Proton launch command: ${launch_cmd[@]}"
@@ -229,7 +250,7 @@ main() {
         wine|/*/wine|wine|/*/wine)
             setup_wine "$@"
         ;;
-        */steam-launch-wrapper)
+        */steam-launch-wrapper|*/proton)
             setup_steam "$@"
         ;;
         "")
@@ -245,12 +266,12 @@ main() {
     prepare_prefix
     setup_env
 
-    "$@"
+    "$@" || ret="$?"
+    log "Command exit status: $ret"
+    exit $ret
 }
 
 main "$@"
 ret="$?"
 [ "$ret" != 0 ] && fatal "Unknown error $ret, see terminal log"
-
-exit "$ret"
 
