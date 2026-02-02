@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -E
 
 spout2pw="$(realpath "$(dirname "$0")")"
 
@@ -73,6 +73,28 @@ find_gbm_backends() {
     log "GBM backend path: $gbm_backends"
 }
 
+gbm_steamrt_workaround() {
+    log "Staging GBM backends to work around Steam Runtime bug"
+    gbm_staging="$(mktemp --tmpdir=/tmp -d spout2pw-gbm.XXXXXXXXXX)"
+    [ ! -d "$gbm_staging" ] && fatal "Failed to create staging directory for GBM backends"
+    gbm_staging="$(realpath "$gbm_staging")"
+
+    log "GBM backend staging path: $gbm_staging"
+
+    trap "rm -vrf $gbm_staging" 1 2 3 6 15 EXIT
+
+    for i in $gbm_backends/*; do
+        base="$(basename "$i")"
+        log "Staging GBM backend $base:"
+        rp="$(realpath "$i")"
+        src="/run/host$rp"
+        dst="$gbm_staging/$base"
+        log "  Linking $dst -> $src"
+        ln -s "$src" "$dst"
+    done
+
+    export GBM_BACKENDS_PATH="$gbm_staging"
+}
 
 setup_wine() {
     fatal "Vanilla wine is not supported yet!"
@@ -100,7 +122,7 @@ setup_umu() {
     fi
 
     if [ "$UMU_NO_RUNTIME" != 1 ]; then
-        export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+        gbm_steamrt_workaround
     fi
 
     run_in_prefix() {
@@ -123,7 +145,7 @@ setup_steam() {
         [[ "$arg" == */proton ]] && break
     done
 
-    export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+    gbm_steamrt_workaround
 
     log "Steam Proton launch command: ${launch_cmd[@]}"
 
@@ -240,6 +262,7 @@ main() {
     setup_env
 
     "$@"
+    return $?
 }
 
 main "$@"
