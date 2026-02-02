@@ -100,7 +100,7 @@ setup_umu() {
     fi
 
     if [ "$UMU_NO_RUNTIME" != 1 ]; then
-        export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+           export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
     fi
 
     run_in_prefix() {
@@ -123,7 +123,11 @@ setup_steam() {
         [[ "$arg" == */proton ]] && break
     done
 
-    export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+    if [[ "$1" == */proton ]]; then
+        export GBM_BACKENDS_PATH="$gbm_backends"
+    else
+        export GBM_BACKENDS_PATH="/run/host/$gbm_backends"
+    fi
 
     log "Steam Proton launch command: ${launch_cmd[@]}"
 
@@ -223,7 +227,7 @@ main() {
         wine|/*/wine|wine|/*/wine)
             setup_wine "$@"
         ;;
-        */steam-launch-wrapper)
+        */steam-launch-wrapper|*/proton)
             setup_steam "$@"
         ;;
         "")
