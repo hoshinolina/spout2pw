@@ -26,6 +26,9 @@ WINE_DEFAULT_DEBUG_CHANNEL(spout2pw);
 // #define HAVE_VK_1_1
 // #define HAVE_VK_1_2
 
+#define D3DFMT_A8R8G8B8 21
+#define D3DFMT_X8R8G8B8 22
+
 #define DXGI_FORMAT_R32G32B32A32_FLOAT 2
 #define DXGI_FORMAT_R16G16B16A16_FLOAT 10
 #define DXGI_FORMAT_R16G16B16A16_UNORM 11
@@ -577,34 +580,47 @@ static void free_texture(struct source *source) {
     TRACE("Texture freed\n");
 }
 
-static VkFormat dx_to_vkformat(uint32_t format) {
+struct format_alpha {
+    VkFormat format;
+    bool alpha;
+};
+
+static struct format_alpha dx_to_vkformat(uint32_t format) {
     TRACE("Format: %d\n", format);
     switch (format) {
     case DXGI_FORMAT_R32G32B32A32_FLOAT:
-        return VK_FORMAT_R32G32B32A32_SFLOAT;
+        return (struct format_alpha){VK_FORMAT_R32G32B32A32_SFLOAT, true};
     case DXGI_FORMAT_R16G16B16A16_FLOAT:
-        return VK_FORMAT_R16G16B16A16_SFLOAT;
+        return (struct format_alpha){VK_FORMAT_R16G16B16A16_SFLOAT, true};
     case DXGI_FORMAT_R16G16B16A16_UNORM:
-        return VK_FORMAT_R16G16B16A16_UNORM;
+        return (struct format_alpha){VK_FORMAT_R16G16B16A16_UNORM, true};
     case DXGI_FORMAT_R16G16B16A16_SNORM:
-        return VK_FORMAT_R16G16B16A16_SNORM;
+        return (struct format_alpha){VK_FORMAT_R16G16B16A16_SNORM, true};
     case DXGI_FORMAT_R10G10B10A2_UNORM:
-        return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+        return (struct format_alpha){VK_FORMAT_A2R10G10B10_UNORM_PACK32, true};
+
+    // Note: Force SRGB, non-SRGB makes no sense.
     case DXGI_FORMAT_R8G8B8A8_UNORM:
-        // return VK_FORMAT_R8G8B8A8_UNORM;
-        return VK_FORMAT_R8G8B8A8_SRGB;
-    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-        return VK_FORMAT_R8G8B8A8_SRGB;
     case DXGI_FORMAT_R8G8B8A8_SNORM:
-        // return VK_FORMAT_R8G8B8A8_SNORM;
-        return VK_FORMAT_R8G8B8A8_SRGB;
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        return (struct format_alpha){VK_FORMAT_R8G8B8A8_SRGB, true};
+
     case DXGI_FORMAT_B8G8R8A8_UNORM:
-        return VK_FORMAT_B8G8R8A8_SRGB;
+        return (struct format_alpha){VK_FORMAT_B8G8R8A8_SRGB, true};
     case DXGI_FORMAT_B8G8R8X8_UNORM:
-        return VK_FORMAT_B8G8R8A8_SRGB;
+        return (struct format_alpha){VK_FORMAT_B8G8R8A8_SRGB, false};
+
+    // Legacy, see:
+    // https://github.com/leadedge/Spout2/blob/2.007.017/SPOUTSDK/SpoutGL/SpoutDirectX.cpp#L580
+    case 0:
+    case D3DFMT_A8R8G8B8:
+        return (struct format_alpha){VK_FORMAT_B8G8R8A8_SRGB, true};
+    case D3DFMT_X8R8G8B8:
+        return (struct format_alpha){VK_FORMAT_B8G8R8A8_SRGB, false};
+
     default:
         ERR("Unsupported DX format %d\n", format);
-        return VK_FORMAT_UNDEFINED;
+        return (struct format_alpha){VK_FORMAT_UNDEFINED, false};
     }
 }
 
@@ -630,8 +646,9 @@ static int import_texture(struct source *source) {
     TRACE("Importing DMA-BUF FD %d -> %d (%dx%d)\n", source->cur_fd, fd,
           source->info.width, source->info.height);
 
-    VkFormat format = dx_to_vkformat(source->info.format);
-    if (format == VK_FORMAT_UNDEFINED)
+    struct format_alpha fmt_alpha = dx_to_vkformat(source->info.format);
+
+    if (fmt_alpha.format == VK_FORMAT_UNDEFINED)
         goto err_close;
 
     VkExternalMemoryImageCreateInfo create_info = {
@@ -643,7 +660,7 @@ static int import_texture(struct source *source) {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext = &create_info,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = format,
+        .format = fmt_alpha.format,
         .extent = (VkExtent3D){source->info.width, source->info.height, 1},
         .mipLevels = 1,
         .arrayLayers = 1,
