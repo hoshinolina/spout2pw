@@ -251,7 +251,6 @@ prepare_prefix() {
 
 }
 
-
 prepare_proton() {
     if ! grep -q 'WINEDLLPATH.*in os.environ' "$protonpath/proton"; then
         fatal "This Proton version is too old to work with Spout2PW.\n\nSpout2PW requires a recent Proton 10."
