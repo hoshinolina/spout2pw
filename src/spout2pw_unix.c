@@ -187,6 +187,7 @@ static VkDevice device = VK_NULL_HANDLE;
 static uint32_t queueFamilyIndex = 0;
 static VkQueue queue = VK_NULL_HANDLE;
 static VkCommandPool commandPool = VK_NULL_HANDLE;
+static uint32_t preferredMemoryTypeBits;
 
 struct {
     PFN_vkGetMemoryFdPropertiesKHR vkGetMemoryFdPropertiesKHR;
@@ -466,6 +467,19 @@ static NTSTATUS startup(void *args) {
         }
     }
 
+    {
+        VkPhysicalDeviceMemoryProperties memoryProperties;
+
+        vkGetPhysicalDeviceMemoryProperties(physDevice, &memoryProperties);
+
+        preferredMemoryTypeBits = 0;
+        for (int i = 0; i < memoryProperties.memoryTypeCount; i++) {
+            if (memoryProperties.memoryTypes[i].propertyFlags &
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                preferredMemoryTypeBits |= 1L << i;
+        }
+    }
+
     int ret = funnel_init(&funnel);
     if (ret) {
         ERR("libfunnel initialization failed: %d\n", ret);
@@ -613,7 +627,8 @@ static struct format_alpha dx_to_vkformat(uint32_t format) {
     // Legacy, see:
     // https://github.com/leadedge/Spout2/blob/2.007.017/SPOUTSDK/SpoutGL/SpoutDirectX.cpp#L580
     case 0:
-        // VSeeFace uses RGBA order here? Might need to peek at DX texture format...
+        // VSeeFace uses RGBA order here? Might need to peek at DX texture
+        // format...
         return (struct format_alpha){VK_FORMAT_R8G8B8A8_SRGB, true};
     case D3DFMT_A8R8G8B8:
         return (struct format_alpha){VK_FORMAT_B8G8R8A8_SRGB, true};
@@ -686,8 +701,14 @@ static int import_texture(struct source *source) {
 
     vk.vkGetImageMemoryRequirements2KHR(device, &mem_reqs_info, &mem_reqs);
 
-    const uint32_t memory_type_bits =
-        mem_reqs.memoryRequirements.memoryTypeBits;
+    uint32_t memory_type_bits = mem_reqs.memoryRequirements.memoryTypeBits;
+
+    if (preferredMemoryTypeBits & memory_type_bits)
+        memory_type_bits &= preferredMemoryTypeBits;
+
+    TRACE("Memory type bits: required=0x%x, preferred=0x%x, choices=0x%x\n",
+          mem_reqs.memoryRequirements.memoryTypeBits, preferredMemoryTypeBits,
+          memory_type_bits);
 
     if (!memory_type_bits) {
         ERR("No valid memory type\n");
@@ -704,7 +725,6 @@ static int import_texture(struct source *source) {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = &memory_fd_info,
         .allocationSize = mem_reqs.memoryRequirements.size,
-        // XXX pick the best memory type?
         .memoryTypeIndex = ffs(memory_type_bits) - 1,
     };
 
