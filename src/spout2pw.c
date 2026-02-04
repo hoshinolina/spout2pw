@@ -158,7 +158,7 @@ static DWORD WINAPI receiver_thread(void *arg) {
 static struct source_info get_receiver_info(struct receiver *receiver) {
     SPOUTDXTOC_RECEIVER *spout = receiver->spout;
     SPOUTDXTOC_SENDERINFO info;
-    struct source_info ret = {.dmabuf_fd = -1};
+    struct source_info ret = {.opaque_fd = -1};
 
     TRACE("Updating receiver %p -> %p (%s)\n", receiver, spout, receiver->name);
 
@@ -237,9 +237,9 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
             return ret;
         }
 
-        TRACE("New texture DMA-BUF fd: %d\n", fd);
+        TRACE("New texture OPAQUE fd: %d\n", fd);
 
-        ret.dmabuf_fd = fd;
+        ret.opaque_fd = fd;
         ret.flags |= RECEIVER_TEXTURE_UPDATED;
         receiver->force_update = false;
     }

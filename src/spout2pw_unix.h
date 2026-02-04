@@ -48,7 +48,7 @@ struct source_info
     uint32_t height;
     uint32_t format;
     uint32_t usage;
-    int32_t dmabuf_fd;
+    int32_t opaque_fd;
 };
 
 #define FRAME_IS_NEW (1<<0)
