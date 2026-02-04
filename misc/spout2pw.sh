@@ -1,7 +1,7 @@
 #!/bin/bash
 set -E
 
-spout2pw="$(realpath "$(dirname "$0")")"
+spout2pw="$(dirname "$(realpath "$0")")"
 
 setup_logging() {
     zenity=
@@ -293,6 +293,8 @@ setup_env() {
 
 main() {
     setup_logging
+
+    log "Spout2PW install path: $spout2pw"
 
     check_environment
     check_pipewire
