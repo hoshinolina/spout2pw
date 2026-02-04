@@ -68,6 +68,18 @@ check_environment() {
     fi
 }
 
+check_pipewire() {
+    pw_version="$(pw-dump | grep '"version": "' 2>/dev/null | head -n 1 | cut -d: -f2 | tr -d '", ')"
+    [ -z "$pw_version" ] && fatal "Failed to check PipeWire daemon version"
+
+    pw_dversion="$(printf "%d%03d%03d\n" $(echo $pw_version | sed -e 's/[^0-9]/ /g') | head -n 1)"
+    log "PipeWire version: $pw_version ($pw_dversion)"
+
+    if [ "$pw_dversion" -lt 1002007 ]; then
+        fatal "Your PipeWire version is too old ($pw_version).\n\nThe minimum supported version is 1.2.7.\n\nVisit lina.yt/oldpw for more info."
+    fi
+}
+
 find_gbm_backends() {
     gbm_backend_paths="
         /usr/lib/x86_64-linux-gnu/GL/lib
@@ -283,6 +295,7 @@ main() {
     setup_logging
 
     check_environment
+    check_pipewire
     find_gbm_backends
 
     verb="$1"
