@@ -39,6 +39,9 @@ static bool do_restart = false;
 #define IOCTL_SHARED_GPU_RESOURCE_OPEN                                         \
     CTL_CODE(FILE_DEVICE_VIDEO, 1, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
+#define IOCTL_SHARED_GPU_RESOURCE_GET_METADATA                                 \
+    CTL_CODE(FILE_DEVICE_VIDEO, 5, METHOD_BUFFERED, FILE_READ_ACCESS)
+
 struct receiver {
     char *name;
     void *source;
@@ -54,6 +57,26 @@ size_t num_receivers = 0;
 struct shared_resource_open {
     unsigned int kmt_handle;
     WCHAR name[1];
+};
+
+typedef enum D3D11_TEXTURE_LAYOUT {
+    D3D11_TEXTURE_LAYOUT_UNDEFINED = 0,
+    D3D11_TEXTURE_LAYOUT_ROW_MAJOR = 1,
+    D3D11_TEXTURE_LAYOUT_64K_STANDARD_SWIZZLE = 2
+} D3D11_TEXTURE_LAYOUT;
+
+struct DxvkSharedTextureMetadata {
+    UINT Width;
+    UINT Height;
+    UINT MipLevels;
+    UINT ArraySize;
+    DXGI_FORMAT Format;
+    DXGI_SAMPLE_DESC SampleDesc;
+    D3D11_USAGE Usage;
+    UINT BindFlags;
+    UINT CPUAccessFlags;
+    UINT MiscFlags;
+    D3D11_TEXTURE_LAYOUT TextureLayout;
 };
 
 static inline void init_unicode_string(UNICODE_STRING *str, const WCHAR *data) {
@@ -109,6 +132,22 @@ static HANDLE open_shared_resource(HANDLE kmt_handle) {
     }
 
     return shared_resource;
+}
+
+static NTSTATUS get_shared_metadata(HANDLE handle, void *buf, uint32_t buf_size,
+                                    uint32_t *metadata_size) {
+    IO_STATUS_BLOCK iosb;
+
+    NTSTATUS status = NtDeviceIoControlFile(
+        handle, NULL, NULL, NULL, &iosb, IOCTL_SHARED_GPU_RESOURCE_GET_METADATA,
+        NULL, 0, buf, buf_size);
+
+    if (status != STATUS_SUCCESS) {
+        ERR("Failed to get shared metadata, status %#lx.\n", (long int)status);
+    } else if (metadata_size) {
+        *metadata_size = iosb.Information;
+    }
+    return status;
 }
 
 static NTSTATUS WINAPI lock_texture(void *args, ULONG size) {
@@ -176,78 +215,123 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
 
     HANDLE share_handle = info.shareHandle;
 
-    TRACE("Sender %dx%d fmt=%d handle=0x%lx changed=%d\n", info.width,
-          info.height, info.format, (long)(intptr_t)info.shareHandle,
-          info.changed);
+    TRACE("Sender %dx%d fmt=%d handle=0x%lx usage=0x%x changed=%d\n",
+          info.width, info.height, info.format,
+          (long)(intptr_t)info.shareHandle, info.usage, info.changed);
 
-    if (info.changed || receiver->force_update) {
-        receiver->force_update = true;
+    ret.width = info.width;
+    ret.height = info.height;
+    ret.format = info.format;
+    ret.usage = info.usage;
 
-        int fd;
-        NTSTATUS status;
-        IO_STATUS_BLOCK iosb;
-        obj_handle_t unix_resource;
-        HANDLE memhandle = open_shared_resource(info.shareHandle);
-        if (memhandle == INVALID_HANDLE_VALUE) {
-            ret.flags |= RECEIVER_TEXTURE_INVALID;
-            WARN("Share handle open failed\n");
-            return ret;
-        }
+    if (!info.changed && !receiver->force_update)
+        return ret;
 
-        TRACE("Share handle opened: 0x%lx -> 0x%lx\n",
-              HandleToLong(share_handle), HandleToLong(memhandle));
+    receiver->force_update = true;
 
-        Sleep(50);
+    int fd;
+    NTSTATUS status;
+    IO_STATUS_BLOCK iosb;
+    obj_handle_t unix_resource;
+    HANDLE memhandle = open_shared_resource(info.shareHandle);
+    if (memhandle == INVALID_HANDLE_VALUE) {
+        ret.flags |= RECEIVER_TEXTURE_INVALID;
+        WARN("Share handle open failed\n");
+        return ret;
+    }
 
-        if (!SpoutDXToCGetSenderInfo(spout, &info) ||
-            info.shareHandle != share_handle) {
-            WARN("Texture changed out under us, trying again later (0x%lx -> "
-                 "0x%lx)\n",
-                 HandleToLong(share_handle), HandleToLong(info.shareHandle));
-            ret.flags |= RECEIVER_TEXTURE_INVALID;
-            NtClose(memhandle);
-            return ret;
-        }
+    TRACE("Share handle opened: 0x%lx -> 0x%lx\n", HandleToLong(share_handle),
+          HandleToLong(memhandle));
 
-        WARN("Update DX Texture\n");
-        if (!SpoutDXToCUpdateDXTexture(spout, &info)) {
-            WARN("Failed to update DX texture\n");
-            ret.flags |= RECEIVER_TEXTURE_INVALID;
-            NtClose(memhandle);
-            return ret;
-        }
+    Sleep(50);
 
-        if (NtDeviceIoControlFile(memhandle, NULL, NULL, NULL, &iosb,
-                                  IOCTL_SHARED_GPU_RESOURCE_GET_UNIX_RESOURCE,
-                                  NULL, 0, &unix_resource,
-                                  sizeof(unix_resource))) {
-            ret.flags |= RECEIVER_TEXTURE_INVALID;
-            TRACE("-> kmt handle failed\n");
-            NtClose(memhandle);
-            return ret;
-        }
-
-        status = wine_server_handle_to_fd(wine_server_ptr_handle(unix_resource),
-                                          GENERIC_ALL, &fd, NULL);
-        NtClose(wine_server_ptr_handle(unix_resource));
+    if (!SpoutDXToCGetSenderInfo(spout, &info) ||
+        info.shareHandle != share_handle) {
+        WARN("Texture changed out under us, trying again later (0x%lx -> "
+             "0x%lx)\n",
+             HandleToLong(share_handle), HandleToLong(info.shareHandle));
+        ret.flags |= RECEIVER_TEXTURE_INVALID;
         NtClose(memhandle);
-        if (status != STATUS_SUCCESS) {
-            ret.flags |= RECEIVER_TEXTURE_INVALID;
-            TRACE("-> failed to convert handle to fd\n");
-            return ret;
-        }
-
-        TRACE("New texture OPAQUE fd: %d\n", fd);
-
-        ret.opaque_fd = fd;
-        ret.flags |= RECEIVER_TEXTURE_UPDATED;
-        receiver->force_update = false;
+        return ret;
     }
 
     ret.width = info.width;
     ret.height = info.height;
     ret.format = info.format;
     ret.usage = info.usage;
+
+    WARN("Update DX Texture\n");
+    if (!SpoutDXToCUpdateDXTexture(spout, &info)) {
+        WARN("Failed to update DX texture\n");
+        ret.flags |= RECEIVER_TEXTURE_INVALID;
+        NtClose(memhandle);
+        return ret;
+    }
+
+    uint32_t ret_size;
+    struct DxvkSharedTextureMetadata metadata;
+
+    if (get_shared_metadata(memhandle, &metadata, sizeof(metadata),
+                            &ret_size) != STATUS_SUCCESS) {
+        TRACE("-> metadata failed\n");
+        goto no_metadata;
+    }
+
+    if (ret_size != sizeof(metadata)) {
+        ERR("Metadata size mismatch, expected 0x%x, got 0x%x\n",
+            (int)sizeof(metadata), ret_size);
+        goto no_metadata;
+    }
+
+    TRACE("DX texture metadata:\n");
+    TRACE("Width          = %d\n", metadata.Width);
+    TRACE("Height         = %d\n", metadata.Height);
+    TRACE("MipLevels      = %d\n", metadata.MipLevels);
+    TRACE("ArraySize      = %d\n", metadata.ArraySize);
+    TRACE("Format         = %d\n", metadata.Format);
+    TRACE("SampleDesc     = %d, %d\n", metadata.SampleDesc.Count,
+          metadata.SampleDesc.Quality);
+    TRACE("Usage          = %d\n", metadata.Usage);
+    TRACE("BindFlags      = %d\n", metadata.BindFlags);
+    TRACE("CPUAccessFlags = %d\n", metadata.CPUAccessFlags);
+    TRACE("MiscFlags      = %d\n", metadata.MiscFlags);
+    TRACE("TextureLayout  = %d\n", metadata.TextureLayout);
+
+    // Sanity check
+    if (!metadata.Width || !metadata.Height) {
+        ERR("Metadata is invalid\n");
+        goto no_metadata;
+    }
+
+    ret.width = metadata.Width;
+    ret.height = metadata.Height;
+    ret.format = metadata.Format;
+
+no_metadata:
+    if (NtDeviceIoControlFile(memhandle, NULL, NULL, NULL, &iosb,
+                              IOCTL_SHARED_GPU_RESOURCE_GET_UNIX_RESOURCE, NULL,
+                              0, &unix_resource, sizeof(unix_resource))) {
+        ret.flags |= RECEIVER_TEXTURE_INVALID;
+        TRACE("-> kmt handle failed\n");
+        NtClose(memhandle);
+        return ret;
+    }
+
+    status = wine_server_handle_to_fd(wine_server_ptr_handle(unix_resource),
+                                      GENERIC_ALL, &fd, NULL);
+    NtClose(wine_server_ptr_handle(unix_resource));
+    NtClose(memhandle);
+    if (status != STATUS_SUCCESS) {
+        ret.flags |= RECEIVER_TEXTURE_INVALID;
+        TRACE("-> failed to convert handle to fd\n");
+        return ret;
+    }
+
+    TRACE("New texture OPAQUE fd: %d\n", fd);
+
+    ret.opaque_fd = fd;
+    ret.flags |= RECEIVER_TEXTURE_UPDATED;
+    receiver->force_update = false;
 
     return ret;
 }
