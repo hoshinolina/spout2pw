@@ -4,8 +4,12 @@ set -E
 spout2pw="$(realpath "$(dirname "$0")")"
 
 setup_logging() {
-    zenity="$(which zenity 2>/dev/null || true)"
-    kdialog="$(which kdialog 2>/dev/null || true)"
+    zenity=
+    kdialog=
+    if [ -n "$WAYLAND_DISPLAY$DISPLAY" ] ; then
+        zenity="$(which zenity 2>/dev/null || true)"
+        kdialog="$(which kdialog 2>/dev/null || true)"
+    fi
     if [ -n "$zenity" ] && [ -e "$zenity" ]; then
         show_info() {
             echo "** Spout2PW info: $*"
