@@ -243,24 +243,7 @@ prepare_prefix() {
     fi
 
     show_info "Installing/updating Spout2PW into Wine prefix..."
-    run_in_prefix cmd /c "rundll32 setupapi.dll,InstallHinfSection DefaultInstall 128 Z:${spout2pw//\//\\}\\spout2pw.inf"
-
-    if check_spout2pw_install; then
-        show_info "Installation successful"
-        return
-    fi
-
-    show_info "Primary installation unsuccessful, trying alternative installation..."
-
-    cp "$spout2pw/spoutdxtoc.dll" "$system32/spoutdxtoc.dll"
-    cp "$spout2pw/wine/x86_64-windows/spout2pw.exe" "$system32/spout2pw.exe"
-
-    run_in_prefix reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Spout2Pw" /v Description /t REG_SZ /d "Spout to PipeWire bridge" /f
-    run_in_prefix reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Spout2Pw" /v DisplayName /t REG_SZ /d "Spout2Pw" /f
-    run_in_prefix reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Spout2Pw" /v ImagePath /t REG_SZ /d "C:\\windows\\system32\\spout2pw.exe" /f
-    run_in_prefix reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Spout2Pw" /v Type /t REG_DWORD /d 288 /f
-    run_in_prefix reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Spout2Pw" /v Start /t REG_DWORD /d 2 /f
-    run_in_prefix reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Spout2Pw" /v ErrorControl /t REG_DWORD /d 1 /f
+    run_in_prefix cmd /c "rundll32 setupapi.dll,InstallHinfSection DefaultInstall 128 Z:${spout2pw//\//\\}\\spout2pw.inf" || fatal "Installation failed"
 
     check_spout2pw_install || fatal "Installation unsuccessful"
     show_info "Installation successful"
