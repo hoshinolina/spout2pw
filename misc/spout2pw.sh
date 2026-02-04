@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -E
 
 spout2pw="$(dirname "$(realpath "$0")")"
