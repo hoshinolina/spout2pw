@@ -12,39 +12,39 @@ setup_logging() {
     fi
     if [ -n "$zenity" ] && [ -e "$zenity" ]; then
         show_info() {
-            echo "** Spout2PW info: $*"
+            echo -e "** Spout2PW info: $*"
             $zenity --width=600 --title="Spout2PW" --info --text="$*"
         }
         show_warning() {
-            echo "** Spout2PW warning: $*"
+            echo -e "** Spout2PW warning: $*"
             $zenity --width=600 --title="Spout2PW warning" --warning --text="$*"
         }
         show_error() {
-            echo "** Spout2PW error: $*"
+            echo -e "** Spout2PW error: $*"
             $zenity --width=600 --title="Spout2PW error" --error --text="$*"
         }
     elif [ -n "$kdialog" ] && [ -e "$kdialog" ]; then
         show_info() {
-            echo "** Spout2PW info: $*"
+            echo -e "** Spout2PW info: $*"
             $kdialog --title="Spout2PW" --msgbox "$*"
         }
         show_warning() {
-            echo "** Spout2PW warning: $*"
+            echo -e "** Spout2PW warning: $*"
             $kdialog --title="Spout2PW warning" --sorry "$*"
         }
         show_error() {
-            echo "** Spout2PW error: $*"
+            echo -e "** Spout2PW error: $*"
             $kdialog --title="Spout2PW error" --sorry "$*"
         }
     else
         show_info() {
-            echo "** Spout2PW info: $*"
+            echo -e "** Spout2PW info: $*"
         }
         show_warning() {
-            echo "** Spout2PW warning: $*"
+            echo -e "** Spout2PW warning: $*"
         }
         show_error() {
-            echo "** Spout2PW error: $*"
+            echo -e "** Spout2PW error: $*"
         }
     fi
 
