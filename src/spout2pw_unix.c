@@ -630,7 +630,7 @@ static int import_texture(struct source *source) {
     VkResult result;
     int fd = -1;
 
-    if (source->info.dmabuf_fd < 0)
+    if (source->info.opaque_fd < 0)
         return -EINVAL;
 
     if (source->cur_fd != -1) {
@@ -638,14 +638,14 @@ static int import_texture(struct source *source) {
         source->cur_fd = -1;
     }
 
-    fd = fcntl(source->info.dmabuf_fd, F_DUPFD_CLOEXEC, 3);
+    fd = fcntl(source->info.opaque_fd, F_DUPFD_CLOEXEC, 3);
     if (fd < 0)
         return -EINVAL;
 
-    source->cur_fd = source->info.dmabuf_fd;
-    source->info.dmabuf_fd = -1;
+    source->cur_fd = source->info.opaque_fd;
+    source->info.opaque_fd = -1;
 
-    TRACE("Importing DMA-BUF FD %d -> %d (%dx%d)\n", source->cur_fd, fd,
+    TRACE("Importing OPAQUE FD %d -> %d (%dx%d)\n", source->cur_fd, fd,
           source->info.width, source->info.height);
 
     struct format_alpha fmt_alpha = dx_to_vkformat(source->info.format);
@@ -932,9 +932,9 @@ static NTSTATUS run_source(void *args) {
 
     vkFreeCommandBuffers(device, commandPool, 1, &source->commandBuffer);
 
-    if (source->info.dmabuf_fd != -1) {
-        close(source->info.dmabuf_fd);
-        source->info.dmabuf_fd = -1;
+    if (source->info.opaque_fd != -1) {
+        close(source->info.opaque_fd);
+        source->info.opaque_fd = -1;
     }
 
     free_texture(source);
@@ -967,9 +967,9 @@ static NTSTATUS update_source(void *args) {
         return STATUS_NO_SUCH_DEVICE;
     }
 
-    if (source->info.dmabuf_fd != -1) {
-        close(source->info.dmabuf_fd);
-        source->info.dmabuf_fd = -1;
+    if (source->info.opaque_fd != -1) {
+        close(source->info.opaque_fd);
+        source->info.opaque_fd = -1;
     }
     source->info = params->info;
     source->update = true;
