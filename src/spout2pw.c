@@ -42,6 +42,9 @@ static bool do_restart = false;
 #define IOCTL_SHARED_GPU_RESOURCE_GET_METADATA                                 \
     CTL_CODE(FILE_DEVICE_VIDEO, 5, METHOD_BUFFERED, FILE_READ_ACCESS)
 
+#define IOCTL_SHARED_GPU_RESOURCE_GET_INFO                                     \
+    CTL_CODE(FILE_DEVICE_VIDEO, 7, METHOD_BUFFERED, FILE_READ_ACCESS)
+
 struct receiver {
     char *name;
     void *source;
@@ -57,6 +60,10 @@ size_t num_receivers = 0;
 struct shared_resource_open {
     unsigned int kmt_handle;
     WCHAR name[1];
+};
+
+struct shared_resource_info {
+    UINT64 resource_size;
 };
 
 typedef enum D3D11_TEXTURE_LAYOUT {
@@ -146,6 +153,20 @@ static NTSTATUS get_shared_metadata(HANDLE handle, void *buf, uint32_t buf_size,
         ERR("Failed to get shared metadata, status %#lx.\n", (long int)status);
     } else if (metadata_size) {
         *metadata_size = iosb.Information;
+    }
+    return status;
+}
+
+static NTSTATUS get_shared_info(HANDLE handle,
+                                struct shared_resource_info *info) {
+    IO_STATUS_BLOCK iosb;
+
+    NTSTATUS status = NtDeviceIoControlFile(handle, NULL, NULL, NULL, &iosb,
+                                            IOCTL_SHARED_GPU_RESOURCE_GET_INFO,
+                                            NULL, 0, info, sizeof(*info));
+
+    if (status != STATUS_SUCCESS) {
+        ERR("Failed to get shared info, status %#lx.\n", (long int)status);
     }
     return status;
 }
@@ -307,7 +328,17 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
     ret.height = metadata.Height;
     ret.format = metadata.Format;
 
+    struct shared_resource_info shared_resource_info;
+
 no_metadata:
+    if (get_shared_info(memhandle, &shared_resource_info)) {
+        TRACE("-> info failed\n");
+        goto no_resource_size;
+    }
+
+    ret.resource_size = shared_resource_info.resource_size;
+
+no_resource_size:
     if (NtDeviceIoControlFile(memhandle, NULL, NULL, NULL, &iosb,
                               IOCTL_SHARED_GPU_RESOURCE_GET_UNIX_RESOURCE, NULL,
                               0, &unix_resource, sizeof(unix_resource))) {
