@@ -728,6 +728,13 @@ static int import_texture(struct source *source) {
         .memoryTypeIndex = ffs(memory_type_bits) - 1,
     };
 
+    if (source->info.resource_size) {
+        if (allocate_info.allocationSize != source->info.resource_size) {
+            ERR("resource size mismatch!");
+        }
+        allocate_info.allocationSize = source->info.resource_size;
+    }
+
     CHECK_VK_RESULT(
         vkAllocateMemory(device, &allocate_info, NULL, &source->mem)) {
         goto err_close;
