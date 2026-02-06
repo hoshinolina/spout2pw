@@ -43,6 +43,7 @@ struct receiver_params
 
 struct source_info
 {
+    uint64_t resource_size;
     uint32_t flags;
     uint32_t width;
     uint32_t height;
