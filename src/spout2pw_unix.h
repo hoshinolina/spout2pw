@@ -49,6 +49,7 @@ struct source_info
     uint32_t height;
     uint32_t format;
     uint32_t usage;
+    uint32_t bind_flags;
     int32_t opaque_fd;
 };
 

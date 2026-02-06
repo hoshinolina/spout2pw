@@ -40,6 +40,10 @@ WINE_DEFAULT_DEBUG_CHANNEL(spout2pw);
 #define DXGI_FORMAT_B8G8R8A8_UNORM 87
 #define DXGI_FORMAT_B8G8R8X8_UNORM 88
 
+#define D3D11_BIND_SHADER_RESOURCE 0x8
+#define D3D11_BIND_RENDER_TARGET 0x20
+#define D3D11_BIND_UNORDERED_ACCESS 0x80
+
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
@@ -686,6 +690,19 @@ static int import_texture(struct source *source) {
         .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
+
+    /**
+     * Extends the usage of the image based on DirectX bind flags.
+     * This maters on NVIDIA proprietary drivers on pre-Turing GPUs as this
+     * seems to have interactions with caches. This follows
+     * https://github.com/doitsujin/dxvk/blob/0bf876eb96767b3548aff3b27985f08d819bcd99/src/d3d11/d3d11_texture.cpp#L96
+     */
+    if (source->info.bind_flags & D3D11_BIND_SHADER_RESOURCE)
+        info.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    if (source->info.bind_flags & D3D11_BIND_RENDER_TARGET)
+        info.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (source->info.bind_flags & D3D11_BIND_UNORDERED_ACCESS)
+        info.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 
     CHECK_VK_RESULT(vkCreateImage(device, &info, NULL, &source->image)) {
         goto err_close;
