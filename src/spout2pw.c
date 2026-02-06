@@ -327,6 +327,7 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
     ret.width = metadata.Width;
     ret.height = metadata.Height;
     ret.format = metadata.Format;
+    ret.bind_flags = metadata.BindFlags;
 
     struct shared_resource_info shared_resource_info;
 
