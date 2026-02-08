@@ -13,27 +13,33 @@ setup_logging() {
     if [ -n "$zenity" ] && [ -e "$zenity" ]; then
         show_info() {
             echo -e "** Spout2PW info: $*"
+            [ "$quiet" == 1 ] && return
             $zenity --width=600 --title="Spout2PW" --info --text="$*"
         }
         show_warning() {
             echo -e "** Spout2PW warning: $*"
+            [ "$quiet" == 1 ] && return
             $zenity --width=600 --title="Spout2PW warning" --warning --text="$*"
         }
         show_error() {
             echo -e "** Spout2PW error: $*"
+            [ "$quiet" == 1 ] && return
             $zenity --width=600 --title="Spout2PW error" --error --text="$*"
         }
     elif [ -n "$kdialog" ] && [ -e "$kdialog" ]; then
         show_info() {
             echo -e "** Spout2PW info: $*"
+            [ "$quiet" == 1 ] && return
             $kdialog --title="Spout2PW" --msgbox "$*"
         }
         show_warning() {
             echo -e "** Spout2PW warning: $*"
+            [ "$quiet" == 1 ] && return
             $kdialog --title="Spout2PW warning" --sorry "$*"
         }
         show_error() {
             echo -e "** Spout2PW error: $*"
+            [ "$quiet" == 1 ] && return
             $kdialog --title="Spout2PW error" --sorry "$*"
         }
     else
@@ -299,16 +305,21 @@ setup_env() {
 }
 
 main() {
+    quiet=0
+
     setup_logging
 
     log "Spout2PW install path: $spout2pw"
 
     enable_debug=0
-
     while [ "$#" -ge 1 ]; do
         case "$1" in
             -debug)
                 enable_debug=1
+                shift
+                ;;
+            -quiet)
+                quiet=1
                 shift
                 ;;
             -*)
