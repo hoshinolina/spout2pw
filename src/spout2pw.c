@@ -640,9 +640,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     static const SERVICE_TABLE_ENTRYW service_table[] = {
         {spout2pwW, ServiceMain}, {NULL, NULL}};
 
+    bool found = false;
+    for (int i = 0; i < 100; i++) {
+        char buf[16];
+        sprintf(buf, "WINEDLLDIR%d", i);
+        const char *val = getenv(buf);
+        if (!val)
+            break;
+        TRACE("Check DLL path: %s=%s\n", buf, val);
+        size_t len = strlen(val);
+        const char *match = "\\spout2pw-dlls";
+        size_t mlen = strlen(match);
+        if (len < mlen)
+            continue;
+        if (strcmp(val + len - mlen, match))
+            continue;
+        TRACE("Spout2PW DLL path found\n");
+        found = 1;
+        break;
+    }
+
+    if (!found) {
+        ERR("Spout2 not configured in WINEDLLPATH\n");
+        return 0;
+    }
+
     TRACE("Starting service ctrl\n");
 
     StartServiceCtrlDispatcherW(service_table);
 
+    TRACE("WinMain returning\n");
     return 0;
 }
