@@ -292,12 +292,33 @@ prepare_proton() {
 
 setup_env() {
     export WINEDLLPATH="$spout2pw/spout2pw-dlls"
+    if [ "$enable_debug" = 1 ]; then
+        export PROTON_LOG=+spout2pw
+        export PIPEWIRE_DEBUG='funnel*:5'
+    fi
 }
 
 main() {
     setup_logging
 
     log "Spout2PW install path: $spout2pw"
+
+    enable_debug=0
+
+    while [ "$#" -ge 1 ]; do
+        case "$1" in
+            -debug)
+                enable_debug=1
+                shift
+                ;;
+            -*)
+                fatal "Unknown argument: $1"
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
 
     check_environment
     check_pipewire
