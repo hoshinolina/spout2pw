@@ -23,8 +23,9 @@
 WINE_DEFAULT_DEBUG_CHANNEL(spout2pw);
 
 static WCHAR spout2pwW[] = L"Spout2Pw";
-static HANDLE exit_event, wine_exit_event;
+static HANDLE exit_event;
 static SERVICE_STATUS_HANDLE service_handle;
+static SERVICE_STATUS service_status;
 
 static HANDLE sendernames_thread_handle = 0;
 static SPOUTDXTOC_SENDERNAMES *spout_names = NULL;
@@ -516,35 +517,24 @@ static DWORD WINAPI sendernames_thread(void *arg) {
 
 static DWORD WINAPI service_handler(DWORD ctrl, DWORD event_type,
                                     LPVOID event_data, LPVOID context) {
-    SERVICE_STATUS status;
-
-    status.dwServiceType = SERVICE_WIN32;
-    status.dwControlsAccepted = SERVICE_ACCEPT_STOP;
-    status.dwWin32ExitCode = 0;
-    status.dwServiceSpecificExitCode = 0;
-    status.dwCheckPoint = 0;
-    status.dwWaitHint = 0;
-
     switch (ctrl) {
     case SERVICE_CONTROL_STOP:
     case SERVICE_CONTROL_SHUTDOWN:
         TRACE("Service control: Shutting down\n");
-        status.dwCurrentState = SERVICE_STOP_PENDING;
-        status.dwControlsAccepted = 0;
-        SetServiceStatus(service_handle, &status);
+        service_status.dwCurrentState = SERVICE_STOP_PENDING;
+        service_status.dwControlsAccepted = 0;
+        SetServiceStatus(service_handle, &service_status);
         SetEvent(exit_event);
         return NO_ERROR;
 
     default:
         FIXME("Got service ctrl %lx\n", (long)ctrl);
-        status.dwCurrentState = SERVICE_RUNNING;
-        SetServiceStatus(service_handle, &status);
+        SetServiceStatus(service_handle, &service_status);
         return NO_ERROR;
     }
 }
 
 static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
-    SERVICE_STATUS status;
     NTSTATUS ret;
 
     service_handle =
@@ -552,8 +542,16 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
     if (!service_handle)
         return;
 
-    TRACE("Loading unix call\n");
+    service_status.dwServiceType = SERVICE_WIN32;
+    service_status.dwCurrentState = SERVICE_START_PENDING;
+    service_status.dwControlsAccepted = 0;
+    service_status.dwWin32ExitCode = 0;
+    service_status.dwServiceSpecificExitCode = 0;
+    service_status.dwCheckPoint = 1;
+    service_status.dwWaitHint = 15000;
+    SetServiceStatus(service_handle, &service_status);
 
+    TRACE("Loading unix calls\n");
     ret = __wine_init_unix_call();
     if (ret != STATUS_SUCCESS) {
         ERR("Failed to init unix calls error %lx\n", (long)ret);
@@ -594,23 +592,20 @@ restart:
 
     exit_event = CreateEventW(NULL, TRUE, FALSE, NULL);
 
-    status.dwServiceType = SERVICE_WIN32;
-    status.dwCurrentState = SERVICE_RUNNING;
-    status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
-    status.dwWin32ExitCode = 0;
-    status.dwServiceSpecificExitCode = 0;
-    status.dwCheckPoint = 0;
-    status.dwWaitHint = 10000;
-    SetServiceStatus(service_handle, &status);
-
     TRACE("Starting sendernames thread\n");
     sendernames_thread_handle =
         CreateThread(NULL, 0, sendernames_thread, NULL, 0, 0);
     TRACE("Sendernames thread created\n");
 
+    service_status.dwCurrentState = SERVICE_RUNNING;
+    service_status.dwControlsAccepted =
+        SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+    service_status.dwCheckPoint = 0;
+    service_status.dwWaitHint = 0;
+    SetServiceStatus(service_handle, &service_status);
+
     TRACE("Waiting for exit event\n");
-    HANDLE handles[2] = {exit_event, wine_exit_event};
-    WaitForMultipleObjects(2, handles, FALSE, INFINITE);
+    WaitForMultipleObjects(1, &exit_event, FALSE, INFINITE);
 
     SetEvent(exit_event);
 
@@ -631,9 +626,11 @@ restart:
     }
 
 stop:
-    status.dwCurrentState = SERVICE_STOPPED;
-    status.dwControlsAccepted = 0;
-    SetServiceStatus(service_handle, &status);
+    service_status.dwCurrentState = SERVICE_STOPPED;
+    service_status.dwControlsAccepted = 0;
+    service_status.dwCheckPoint = 0;
+    service_status.dwWaitHint = 0;
+    SetServiceStatus(service_handle, &service_status);
 
     TRACE("Service stopped\n");
 }
@@ -643,10 +640,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     static const SERVICE_TABLE_ENTRYW service_table[] = {
         {spout2pwW, ServiceMain}, {NULL, NULL}};
 
-    TRACE("Make system\n");
-    wine_exit_event = NULL;
-    NtSetInformationProcess(GetCurrentProcess(), ProcessWineMakeProcessSystem,
-                            &wine_exit_event, sizeof(HANDLE *));
     TRACE("Starting service ctrl\n");
 
     StartServiceCtrlDispatcherW(service_table);
