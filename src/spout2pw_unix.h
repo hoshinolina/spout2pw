@@ -85,9 +85,13 @@ struct update_source_params
     struct source_info info;
 };
 
-enum spout2xdp_funcs
-{
-    unix_libs_init,
+struct getenv_params {
+    const char *var;
+    const char *val;
+};
+
+enum spout2pw_funcs {
+    unix_getenv,
     unix_startup,
     unix_teardown,
     unix_create_source,

@@ -1057,10 +1057,15 @@ static NTSTATUS _teardown(void *args) {
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS libs_init(void *args) { return STATUS_SUCCESS; }
+static NTSTATUS _getenv(void *args) {
+    struct getenv_params *params = args;
+    params->val = getenv(params->var);
+
+    return STATUS_SUCCESS;
+}
 
 const unixlib_entry_t __wine_unix_call_funcs[] = {
-    libs_init,  startup,       _teardown,      create_source,
+    _getenv,    startup,       _teardown,      create_source,
     run_source, update_source, destroy_source,
 };
 

@@ -534,6 +534,20 @@ static DWORD WINAPI service_handler(DWORD ctrl, DWORD event_type,
     }
 }
 
+// Future use
+__attribute__((unused)) static const char *_getenv(const char *var) {
+    NTSTATUS ret;
+    struct getenv_params params = {.var = var};
+
+    ret = UNIX_CALL(getenv, &params);
+    if (ret != STATUS_SUCCESS) {
+        TRACE("unix_getenv(%s) failed (0x%lx)\n", var, ret);
+        return NULL;
+    }
+
+    return params.val;
+}
+
 static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
     NTSTATUS ret;
 
@@ -552,19 +566,14 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
     SetServiceStatus(service_handle, &service_status);
 
     TRACE("Loading unix calls\n");
-    ret = __wine_init_unix_call();
-    if (ret != STATUS_SUCCESS) {
-        ERR("Failed to init unix calls error %lx\n", (long)ret);
-        goto stop;
-    }
 
-    ret = UNIX_CALL(libs_init, NULL);
+    ret = __wine_init_unix_call();
     if (ret != STATUS_SUCCESS) {
         ERR("Failed to init unix libs error %lx\n", (long)ret);
         goto stop;
     }
 
-    TRACE("Checking if spoutdxtoc.dll is not a stub\n");
+    TRACE("Initializing spoutdxtoc.dll\n");
 
 restart:
 
