@@ -242,8 +242,9 @@ check_spout2pw_install() {
         return 0
     }
 
-    check_file "$spout2pw/spoutdxtoc.dll" "$system32/spoutdxtoc.dll" || return 1
-    check_file "$spout2pw/wine/x86_64-windows/spout2pw.exe" "$system32/spout2pw.exe" || return 1
+    for file in spoutdxtoc.dll spout2pw.exe; do
+        check_file "$spout2pw/spout2pw-dlls/x86_64-windows/$file" "$system32/$file" || return 1
+    done
 
     log "Checking for service"
     if ! grep -q 'Services\\\\Spout2Pw' $wineprefix/system.reg; then
@@ -287,7 +288,7 @@ prepare_proton() {
 }
 
 setup_env() {
-    export WINEDLLPATH="$spout2pw/wine"
+    export WINEDLLPATH="$spout2pw/spout2pw-dlls"
 }
 
 main() {

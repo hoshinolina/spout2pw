@@ -8,8 +8,8 @@ CopyFiles = Spout2PwFiles
 AddService = Spout2Pw,0,Spout2PwService
 
 [Spout2PwFiles]
-spout2pw.exe,"wine\x86_64-windows\spout2pw.exe"
-spoutdxtoc.dll
+spout2pw.exe,"spout2pw-dlls\x86_64-windows\spout2pw.exe"
+spoutdxtoc.dll,"spout2pw-dlls\x86_64-windows\spoutdxtoc.dll"
 
 [DestinationDirs]
 DefaultDestDir = 11
