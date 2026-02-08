@@ -328,6 +328,7 @@ main() {
     prepare_prefix
     setup_env
 
+    ret=0
     "$@" || ret="$?"
     log "Command exit status: $ret"
     exit $ret
