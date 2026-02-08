@@ -3,46 +3,51 @@
 #define __WINESRC__
 
 #include <ntstatus.h>
+
 #define WIN32_NO_STATUS
 #include <windef.h>
+
 #include <winbase.h>
 #include <winuser.h>
+
 #include <ntuser.h>
+
 #include "wine/unixlib.h"
 
-// Wine 9.0 build compat (Build only! This will not work with wine 9.0 at runtime!)
+// Wine 9.0 build compat (Build only! This will not work with wine 9.0 at
+// runtime!)
 #ifndef ALL_USER32_CALLBACKS
 #define NtUserCallDispatchCallback 0
 
 /* NtUserCallDispatchCallback params */
-struct dispatch_callback_params
-{
+struct dispatch_callback_params {
     UINT64 callback;
 };
 
-NTSYSAPI NTSTATUS KeUserModeCallback( ULONG id, const void *args, ULONG len, void **ret_ptr, ULONG *ret_len );
+NTSYSAPI NTSTATUS KeUserModeCallback(ULONG id, const void *args, ULONG len,
+                                     void **ret_ptr, ULONG *ret_len);
 
-static inline NTSTATUS KeUserDispatchCallback( const struct dispatch_callback_params *params, ULONG len,
-                                               void **ret_ptr, ULONG *ret_len )
-{
-    if (!params->callback) return STATUS_ENTRYPOINT_NOT_FOUND;
-    return KeUserModeCallback( NtUserCallDispatchCallback, params, len, ret_ptr, ret_len );
+static inline NTSTATUS
+KeUserDispatchCallback(const struct dispatch_callback_params *params, ULONG len,
+                       void **ret_ptr, ULONG *ret_len) {
+    if (!params->callback)
+        return STATUS_ENTRYPOINT_NOT_FOUND;
+    return KeUserModeCallback(NtUserCallDispatchCallback, params, len, ret_ptr,
+                              ret_len);
 }
 
 #endif
 
-struct receiver_params
-{
+struct receiver_params {
     struct dispatch_callback_params dispatch;
     void *receiver;
 };
 
-#define RECEIVER_DISCONNECTED (1<<0)
-#define RECEIVER_TEXTURE_UPDATED (1<<1)
-#define RECEIVER_TEXTURE_INVALID (1<<2)
+#define RECEIVER_DISCONNECTED (1 << 0)
+#define RECEIVER_TEXTURE_UPDATED (1 << 1)
+#define RECEIVER_TEXTURE_INVALID (1 << 2)
 
-struct source_info
-{
+struct source_info {
     uint64_t resource_size;
     uint32_t flags;
     uint32_t width;
@@ -53,25 +58,22 @@ struct source_info
     int32_t opaque_fd;
 };
 
-#define FRAME_IS_NEW (1<<0)
+#define FRAME_IS_NEW (1 << 0)
 
-struct lock_texture_return
-{
+struct lock_texture_return {
     struct dispatch_callback_params dispatch;
     int32_t retval;
     uint32_t flags;
     uint64_t frame_count;
 };
 
-struct startup_params
-{
+struct startup_params {
     UINT64 lock_texture;
     UINT64 unlock_texture;
     char *error_msg;
 };
 
-struct create_source_params
-{
+struct create_source_params {
     const char *sender_name;
     void *receiver;
     struct source_info info;
@@ -80,8 +82,7 @@ struct create_source_params
     void *ret_source;
 };
 
-struct update_source_params
-{
+struct update_source_params {
     void *source;
     struct source_info info;
 };
@@ -102,4 +103,4 @@ enum spout2pw_funcs {
     unix_funcs_count
 };
 
-#define UNIX_CALL( func, params ) WINE_UNIX_CALL( unix_ ## func, params )
+#define UNIX_CALL(func, params) WINE_UNIX_CALL(unix_##func, params)
