@@ -635,11 +635,12 @@ restart:
     struct startup_params params = {
         .lock_texture = (UINT_PTR)lock_texture,
         .unlock_texture = (UINT_PTR)unlock_texture,
+        .error_msg = NULL,
     };
 
     ret = UNIX_CALL(startup, &params);
     if (ret != STATUS_SUCCESS) {
-        msg = "Failed to init libfunnel";
+        msg = params.error_msg;
         goto stop;
     }
 

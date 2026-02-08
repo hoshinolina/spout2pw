@@ -1,8 +1,3 @@
-#if 0 // NOTE: Never dare forgot that, otherwise makedep will not put the file
-      // to the unix lib
-#pragma makedep unix
-#endif
-
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -19,6 +14,7 @@
 
 #include "spout2pw_unix.h"
 #include "wine/debug.h"
+#include <ntstatus.h>
 
 WINE_DEFAULT_DEBUG_CHANNEL(spout2pw);
 
@@ -51,6 +47,21 @@ WINE_DEFAULT_DEBUG_CHANNEL(spout2pw);
     result = _expr;                                                            \
     if (result != VK_SUCCESS) {                                                \
         ERR("Vulkan error on %s: %i\n", #_expr, result);                       \
+    }                                                                          \
+    if (result != VK_SUCCESS)
+
+#define STARTUP_ERROR(...)                                                     \
+    do {                                                                       \
+        snprintf(error_msg, sizeof(error_msg), __VA_ARGS__);                   \
+        error_msg[sizeof(error_msg) - 1] = 0;                                  \
+        ERR("Startup error: %s\n", error_msg);                                 \
+        params->error_msg = error_msg;                                         \
+    } while (0)
+
+#define CHECK_VK_STARTUP(_expr)                                                \
+    result = _expr;                                                            \
+    if (result != VK_SUCCESS) {                                                \
+        STARTUP_ERROR("Vulkan error on %s: %i", #_expr, result);               \
     }                                                                          \
     if (result != VK_SUCCESS)
 
@@ -192,6 +203,7 @@ static uint32_t queueFamilyIndex = 0;
 static VkQueue queue = VK_NULL_HANDLE;
 static VkCommandPool commandPool = VK_NULL_HANDLE;
 static uint32_t preferredMemoryTypeBits;
+static char error_msg[1024];
 
 struct {
     PFN_vkGetMemoryFdPropertiesKHR vkGetMemoryFdPropertiesKHR;
@@ -267,22 +279,21 @@ static NTSTATUS startup(void *args) {
         VkInstanceCreateInfo createInfo = {0};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledExtensionCount =
-            sizeof(instanceExtensionNames) / sizeof(const char *);
+        createInfo.enabledExtensionCount = ARRAY_SIZE(instanceExtensionNames);
         createInfo.ppEnabledExtensionNames = instanceExtensionNames;
 
         size_t foundLayers = 0;
 
         uint32_t deviceLayerCount;
-        CHECK_VK_RESULT(
+        CHECK_VK_STARTUP(
             vkEnumerateInstanceLayerProperties(&deviceLayerCount, NULL)) {
             return STATUS_FATAL_APP_EXIT;
         }
 
         VkLayerProperties *layerProperties =
             malloc(deviceLayerCount * sizeof(VkLayerProperties));
-        CHECK_VK_RESULT(vkEnumerateInstanceLayerProperties(&deviceLayerCount,
-                                                           layerProperties)) {
+        CHECK_VK_STARTUP(vkEnumerateInstanceLayerProperties(&deviceLayerCount,
+                                                            layerProperties)) {
             return STATUS_FATAL_APP_EXIT;
         }
 
@@ -305,7 +316,35 @@ static NTSTATUS startup(void *args) {
             }
         }
 
-        CHECK_VK_RESULT(vkCreateInstance(&createInfo, NULL, &instance)) {
+        {
+            uint32_t count = 0;
+            vkEnumerateInstanceExtensionProperties(NULL, &count, NULL);
+            VkExtensionProperties *ext_props =
+                malloc(sizeof(VkExtensionProperties) * count);
+            vkEnumerateInstanceExtensionProperties(NULL, &count, ext_props);
+
+            for (int i = 0; i < ARRAY_SIZE(instanceExtensionNames); i++) {
+                bool found = false;
+                for (int j = 0; j < count; j++) {
+                    if (!strcmp(instanceExtensionNames[i],
+                                ext_props[j].extensionName)) {
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) {
+                    STARTUP_ERROR("Missing Vulkan instance extension: %s",
+                                  instanceExtensionNames[i]);
+                    free(ext_props);
+
+                    return STATUS_NOT_SUPPORTED;
+                }
+            }
+
+            free(ext_props);
+        }
+
+        CHECK_VK_STARTUP(vkCreateInstance(&createInfo, NULL, &instance)) {
             return STATUS_FATAL_APP_EXIT;
         }
     }
@@ -324,7 +363,7 @@ static NTSTATUS startup(void *args) {
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         createInfo.pfnUserCallback = onError;
 
-        CHECK_VK_RESULT(GET_EXTENSION_FUNCTION(vkCreateDebugUtilsMessengerEXT)(
+        CHECK_VK_STARTUP(GET_EXTENSION_FUNCTION(vkCreateDebugUtilsMessengerEXT)(
             instance, &createInfo, NULL, &debugMessenger)) {
             return STATUS_FATAL_APP_EXIT;
         }
@@ -407,14 +446,14 @@ static NTSTATUS startup(void *args) {
         };
 
         uint32_t deviceLayerCount;
-        CHECK_VK_RESULT(vkEnumerateDeviceLayerProperties(
+        CHECK_VK_STARTUP(vkEnumerateDeviceLayerProperties(
             physDevice, &deviceLayerCount, NULL)) {
             return STATUS_FATAL_APP_EXIT;
         }
 
         VkLayerProperties *layerProperties =
             malloc(deviceLayerCount * sizeof(VkLayerProperties));
-        CHECK_VK_RESULT(vkEnumerateDeviceLayerProperties(
+        CHECK_VK_STARTUP(vkEnumerateDeviceLayerProperties(
             physDevice, &deviceLayerCount, layerProperties)) {
             return STATUS_FATAL_APP_EXIT;
         }
@@ -438,7 +477,36 @@ static NTSTATUS startup(void *args) {
             createInfo.ppEnabledLayerNames = layerNames;
         }
 
-        CHECK_VK_RESULT(
+        {
+            uint32_t count = 0;
+            vkEnumerateDeviceExtensionProperties(physDevice, NULL, &count,
+                                                 NULL);
+            VkExtensionProperties *ext_props =
+                malloc(sizeof(VkExtensionProperties) * count);
+            vkEnumerateDeviceExtensionProperties(physDevice, NULL, &count,
+                                                 ext_props);
+
+            for (int i = 0; i < ARRAY_SIZE(deviceExtensionNames); i++) {
+                bool found = false;
+                for (int j = 0; j < count; j++) {
+                    if (!strcmp(deviceExtensionNames[i],
+                                ext_props[j].extensionName)) {
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) {
+                    STARTUP_ERROR("Missing Vulkan device extension: %s",
+                                  deviceExtensionNames[i]);
+                    free(ext_props);
+                    return STATUS_NOT_SUPPORTED;
+                }
+            }
+
+            free(ext_props);
+        }
+
+        CHECK_VK_STARTUP(
             vkCreateDevice(physDevice, &createInfo, NULL, &device)) {
             return STATUS_FATAL_APP_EXIT;
         }
@@ -465,7 +533,7 @@ static NTSTATUS startup(void *args) {
         createInfo.queueFamilyIndex = queueFamilyIndex;
         createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-        CHECK_VK_RESULT(
+        CHECK_VK_STARTUP(
             vkCreateCommandPool(device, &createInfo, NULL, &commandPool)) {
             return STATUS_FATAL_APP_EXIT;
         }
@@ -486,7 +554,11 @@ static NTSTATUS startup(void *args) {
 
     int ret = funnel_init(&funnel);
     if (ret) {
-        ERR("libfunnel initialization failed: %d\n", ret);
+        if (ret == -ECONNREFUSED) {
+            STARTUP_ERROR("Failed to connect to PipeWire");
+            return STATUS_PORT_CONNECTION_REFUSED;
+        }
+        STARTUP_ERROR("libfunnel initialization failed: %d", ret);
         return errno_to_status(-ret);
     }
 

@@ -67,6 +67,7 @@ struct startup_params
 {
     UINT64 lock_texture;
     UINT64 unlock_texture;
+    char *error_msg;
 };
 
 struct create_source_params
