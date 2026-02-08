@@ -260,6 +260,9 @@ prepare_prefix() {
     fi
 
     show_info "Installing/updating Spout2PW into Wine prefix..."
+
+    # Make sure spout2pw does not start up during the install, as it could lock the file.
+    [ -e "$system32/spout2pw.exe" ] && rm -f "$system32/spout2pw.exe"
     
     run_in_prefix cmd /c "rundll32 setupapi.dll,InstallHinfSection DefaultInstall 128 Z:${spout2pw//\//\\}\\spout2pw.inf" || fatal "Installation failed"
 
