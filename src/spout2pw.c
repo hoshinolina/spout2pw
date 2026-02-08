@@ -12,6 +12,7 @@
 #include <windef.h>
 #include <winnt.h>
 #include <winsvc.h>
+#include <winuser.h>
 
 #include <winioctl.h>
 
@@ -91,6 +92,50 @@ static inline void init_unicode_string(UNICODE_STRING *str, const WCHAR *data) {
     str->Length = wcslen(data) * sizeof(WCHAR);
     str->MaximumLength = str->Length + sizeof(WCHAR);
     str->Buffer = (WCHAR *)data;
+}
+
+void show_error(HRESULT res, const char *msg) {
+    if (!msg) {
+        switch (res) {
+        case STATUS_FATAL_APP_EXIT:
+            msg = "Unknown fatal error";
+            break;
+        case STATUS_ACCESS_VIOLATION:
+            msg = "Spout2PW crashed (access violation)";
+            break;
+        case STATUS_NO_SUCH_DEVICE:
+            msg = "Device crashed or unavailable";
+            break;
+        default:
+            msg = "Unknown error";
+            break;
+        }
+    }
+
+    char *dialog_msg = malloc(strlen(msg) + 256);
+    sprintf(dialog_msg,
+            "%s (%08lx)\n\n"
+            "Please see https://lina.yt/s2pw-error for troubleshooting steps.",
+            msg, (long)res);
+
+    ERR("Error: %s\n", dialog_msg);
+
+    // Kick the service status so the window is not closed automatically
+    // too quickly.
+    service_status.dwCheckPoint++;
+    service_status.dwWaitHint = 30000;
+    SetServiceStatus(service_handle, &service_status);
+
+    TRACE("Show error message box\n");
+
+    // Hack: https://bugs.winehq.org/show_bug.cgi?id=59393
+    AllocConsole();
+
+    MessageBoxA(NULL, dialog_msg, "Spout2PW error",
+                MB_OK | MB_ICONERROR | MB_SERVICE_NOTIFICATION | MB_TOPMOST);
+    TRACE("Message box returned\n");
+
+    free(dialog_msg);
 }
 
 static HANDLE open_shared_resource(HANDLE kmt_handle) {
@@ -550,6 +595,7 @@ __attribute__((unused)) static const char *_getenv(const char *var) {
 
 static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
     NTSTATUS ret;
+    const char *msg = NULL;
 
     service_handle =
         RegisterServiceCtrlHandlerExW(spout2pwW, service_handler, NULL);
@@ -569,7 +615,7 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
 
     ret = __wine_init_unix_call();
     if (ret != STATUS_SUCCESS) {
-        ERR("Failed to init unix libs error %lx\n", (long)ret);
+        msg = "Error initializing UNIX library";
         goto stop;
     }
 
@@ -580,7 +626,7 @@ restart:
     // NOTE: There is no point continuing if it is.
     spout_names = SpoutDXToCNewSenderNames();
     if (spout_names == NULL) {
-        ERR("spoutdxtoc.dll is a stub\n");
+        msg = "Error initializing spoutdxtoc.dll";
         goto stop;
     }
 
@@ -593,7 +639,7 @@ restart:
 
     ret = UNIX_CALL(startup, &params);
     if (ret != STATUS_SUCCESS) {
-        ERR("Failed to init libfunnel error %lx\n", (long)ret);
+        msg = "Failed to init libfunnel";
         goto stop;
     }
 
@@ -635,6 +681,11 @@ restart:
     }
 
 stop:
+    if (ret != STATUS_SUCCESS) {
+        show_error(ret, msg);
+    }
+
+    FreeConsole();
     service_status.dwCurrentState = SERVICE_STOPPED;
     service_status.dwControlsAccepted = 0;
     service_status.dwCheckPoint = 0;
