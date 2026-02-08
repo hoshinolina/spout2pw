@@ -212,41 +212,40 @@ struct {
 } vk;
 
 static VkBool32
-onError(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-        VkDebugUtilsMessageTypeFlagsEXT type,
-        const VkDebugUtilsMessengerCallbackDataEXT *callbackData,
-        void *userData) {
-    ERR("Vulkan ");
+vulkan_message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+               VkDebugUtilsMessageTypeFlagsEXT type,
+               const VkDebugUtilsMessengerCallbackDataEXT *callbackData,
+               void *userData) {
+
+    const char *cls = "unknown";
 
     switch (type) {
     case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-        ERR("general ");
+        cls = "general";
         break;
     case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-        ERR("validation ");
+        cls = "validation";
         break;
     case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-        ERR("performance ");
+        cls = "performance";
         break;
     }
 
     switch (severity) {
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-        ERR("(verbose): ");
+        TRACE("%s(verbose): %s\n", cls, callbackData->pMessage);
         break;
     default:
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-        ERR("(info): ");
+        TRACE("%s: %s\n", cls, callbackData->pMessage);
         break;
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-        ERR("(warning): ");
+        WARN("%s: %s\n", cls, callbackData->pMessage);
         break;
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-        ERR("(error): ");
+        ERR("%s: %s\n", cls, callbackData->pMessage);
         break;
     }
-
-    ERR("%s\n", callbackData->pMessage);
 
     return 0;
 }
@@ -361,7 +360,7 @@ static NTSTATUS startup(void *args) {
             VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = onError;
+        createInfo.pfnUserCallback = vulkan_message;
 
         CHECK_VK_STARTUP(GET_EXTENSION_FUNCTION(vkCreateDebugUtilsMessengerEXT)(
             instance, &createInfo, NULL, &debugMessenger)) {
