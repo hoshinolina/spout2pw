@@ -1,4 +1,4 @@
-# Spout2 to PipeWire bridge
+# Spout2PW: Spout2 to PipeWire bridge
 
 **[Spout2PW website](https://spout2pw.lina.yt)**
 
