@@ -106,6 +106,9 @@ void show_error(HRESULT res, const char *msg) {
         case STATUS_NO_SUCH_DEVICE:
             msg = "Device crashed or unavailable";
             break;
+        case STATUS_NOT_SUPPORTED:
+            msg = "Missing a required feature";
+            break;
         default:
             msg = "Unknown error";
             break;
@@ -425,13 +428,15 @@ static void update_receiver(struct receiver *receiver) {
                 .info = new_info,
             };
             TRACE("Creating source\n");
-            UNIX_CALL(create_source, &params);
+            NTSTATUS ret = UNIX_CALL(create_source, &params);
             receiver->source = params.ret_source;
             if (receiver->source) {
                 receiver->thread =
                     CreateThread(NULL, 0, receiver_thread, receiver, 0, 0);
             } else {
-                TRACE("Source creation failed\n");
+                TRACE("Source creation failed: 0x%lx %s\n", ret,
+                      params.error_msg);
+                show_error(ret, params.error_msg);
             }
         }
         return;

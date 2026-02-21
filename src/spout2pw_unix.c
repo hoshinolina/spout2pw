@@ -102,6 +102,7 @@ static NTSTATUS errno_to_status(int err) {
         return STATUS_NO_MEMORY;
 
     case ESOCKTNOSUPPORT:
+    case EPROTONOSUPPORT:
         return STATUS_PROTOCOL_UNREACHABLE;
 
     case ENOTCONN:
@@ -582,19 +583,20 @@ static NTSTATUS create_source(void *args) {
 
     CHECK_VK_RESULT(
         vkAllocateCommandBuffers(device, &allocInfo, &source->commandBuffer)) {
+        ERROR_MSG("Failed to allocate Vulkan command buffer");
         ret = -EIO;
         goto free_source;
     }
 
     ret = funnel_stream_create(funnel, params->sender_name, &stream);
     if (ret) {
-        ERR("Failed to create libfunnel stream\n");
+        ERROR_MSG("Failed to create PipeWire stream");
         goto free_cmdbufs;
     }
 
     ret = funnel_stream_init_vulkan(stream, instance, physDevice, device);
     if (ret) {
-        ERR("Funnel Vulkan init failed\n");
+        ERROR_MSG("Failed to set up Vulkan for stream");
         goto free_stream;
     }
 

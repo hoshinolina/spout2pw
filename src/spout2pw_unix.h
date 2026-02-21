@@ -80,6 +80,7 @@ struct create_source_params {
 
     // return
     void *ret_source;
+    char *error_msg;
 };
 
 struct update_source_params {
