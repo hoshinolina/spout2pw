@@ -50,18 +50,18 @@ WINE_DEFAULT_DEBUG_CHANNEL(spout2pw);
     }                                                                          \
     if (result != VK_SUCCESS)
 
-#define STARTUP_ERROR(...)                                                     \
+#define ERROR_MSG(...)                                                         \
     do {                                                                       \
         snprintf(error_msg, sizeof(error_msg), __VA_ARGS__);                   \
         error_msg[sizeof(error_msg) - 1] = 0;                                  \
-        ERR("Startup error: %s\n", error_msg);                                 \
+        ERR("Error: %s\n", error_msg);                                         \
         params->error_msg = error_msg;                                         \
     } while (0)
 
 #define CHECK_VK_STARTUP(_expr)                                                \
     result = _expr;                                                            \
     if (result != VK_SUCCESS) {                                                \
-        STARTUP_ERROR("Vulkan error on %s: %i", #_expr, result);               \
+        ERROR_MSG("Vulkan error on %s: %i", #_expr, result);                   \
     }                                                                          \
     if (result != VK_SUCCESS)
 
@@ -332,8 +332,8 @@ static NTSTATUS startup(void *args) {
                     }
                 }
                 if (!found) {
-                    STARTUP_ERROR("Missing Vulkan instance extension: %s",
-                                  instanceExtensionNames[i]);
+                    ERROR_MSG("Missing Vulkan instance extension: %s",
+                              instanceExtensionNames[i]);
                     free(ext_props);
 
                     return STATUS_NOT_SUPPORTED;
@@ -495,8 +495,8 @@ static NTSTATUS startup(void *args) {
                     }
                 }
                 if (!found) {
-                    STARTUP_ERROR("Missing Vulkan device extension: %s",
-                                  deviceExtensionNames[i]);
+                    ERROR_MSG("Missing Vulkan device extension: %s",
+                              deviceExtensionNames[i]);
                     free(ext_props);
                     return STATUS_NOT_SUPPORTED;
                 }
@@ -554,10 +554,10 @@ static NTSTATUS startup(void *args) {
     int ret = funnel_init(&funnel);
     if (ret) {
         if (ret == -ECONNREFUSED) {
-            STARTUP_ERROR("Failed to connect to PipeWire");
+            ERROR_MSG("Failed to connect to PipeWire");
             return STATUS_PORT_CONNECTION_REFUSED;
         }
-        STARTUP_ERROR("libfunnel initialization failed: %d", ret);
+        ERROR_MSG("libfunnel initialization failed: %d", ret);
         return errno_to_status(-ret);
     }
 
