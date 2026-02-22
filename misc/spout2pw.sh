@@ -122,8 +122,12 @@ gbm_steamrt_workaround() {
         return
     fi
 
-    srt_version="$(cat "$1"/VERSIONS.txt | grep ^pressure-vessel | cut -f2)"
+    srt_version="$(cat "$1"/VERSIONS.txt | grep '^pressure-vessel' | cut -f2)"
     log "Steam Runtime version: $srt_version"
+    if [ -z "$srt_version" ]; then
+        log "  Invalid Steam Runtime version, assuming new and skipping GBM workaround"
+        return
+    fi
     if verchk "$srt_version" 0.20260218.0; then
         log "  Steam Runtime is new enough, skipping GBM workaround"
         return
