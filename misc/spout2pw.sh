@@ -74,14 +74,18 @@ check_environment() {
     fi
 }
 
+verchk() {
+    oldest=$(printf '%s\n' "$2" "$1" | sort -V | head -n1)
+    log "  Version check: $1 >= $2, oldest: $oldest"
+    [ "$oldest" = "$2" ] || return 1
+}
+
 check_pipewire() {
     pw_version="$(pw-dump | grep '"version": "' 2>/dev/null | head -n 1 | cut -d: -f2 | tr -d '", ')"
     [ -z "$pw_version" ] && fatal "Failed to check PipeWire daemon version"
+    log "PipeWire version: $pw_version"
 
-    pw_dversion="$(printf "%d%03d%03d\n" $(echo $pw_version | sed -e 's/[^0-9]/ /g') | head -n 1)"
-    log "PipeWire version: $pw_version ($pw_dversion)"
-
-    if [ "$pw_dversion" -lt 1002007 ]; then
+    if ! verchk "$pw_version" 1.2.7; then
         fatal "Your PipeWire version is too old ($pw_version).\n\nThe minimum supported version is 1.2.7.\n\nVisit lina.yt/oldpw for more info."
     fi
 }
@@ -113,7 +117,21 @@ find_gbm_backends() {
 }
 
 gbm_steamrt_workaround() {
-    log "Staging GBM backends to work around Steam Runtime bug"
+    if [ -z "$1" ] || [ ! -d "$1" ] || [ ! -e "$1/VERSIONS.txt" ]; then
+        log "Could not find Steam Runtime VERSIONS.txt at '$1', not checking for GBM workaround"
+        return
+    fi
+
+    srt_version="$(cat "$1"/VERSIONS.txt | grep ^pressure-vessel | cut -f2)"
+    log "Steam Runtime version: $srt_version"
+    if verchk "$srt_version" 0.20260218.0; then
+        log "  Steam Runtime is new enough, skipping GBM workaround"
+        return
+    fi
+
+    log "  Steam Runtime is old, applying GBM workaround"
+    log "Staging GBM backends..."
+
     gbm_staging="$(mktemp --tmpdir=/tmp -d spout2pw-gbm.XXXXXXXXXX)"
     [ ! -d "$gbm_staging" ] && fatal "Failed to create staging directory for GBM backends"
     gbm_staging="$(realpath "$gbm_staging")"
@@ -153,8 +171,24 @@ setup_umu() {
 
     log "Setting up Proton with umu-launcher ($PROTONPATH)..."
 
-    protonpath=$(UMU_LOG=1 "$umu" /bin/true 2>&1 |
-        grep 'umu_run.*PROTONPATH=' | sed 's/.*=//g')
+    readarray -t umu_vars <<<"$(UMU_LOG=1 "$umu" /bin/true 2>&1 | grep 'umu_run:.*=' | sed 's/.*: //')"
+
+    for var in "${umu_vars[@]}"; do
+        key="$(echo "$var" | cut -d= -f1)"
+        val="$(echo "$var" | cut -d= -f2-)"
+        case "$key" in
+            PROTONPATH)
+                protonpath="$val"
+                ;;
+            RUNTIMEPATH)
+                runtimepath="$val"
+                ;;
+        esac
+    done
+
+    if [ "$UMU_NO_RUNTIME" != 1 ]; then
+        gbm_steamrt_workaround "$runtimepath"
+    fi
 
     if [ -n "$WINEPREFIX" ]; then
         wineprefix="$WINEPREFIX"
@@ -162,10 +196,6 @@ setup_umu() {
         wineprefix="$HOME/Games/umu/$GAMEID/"
     else
         wineprefix="$HOME/Games/umu/umu-default/"
-    fi
-
-    if [ "$UMU_NO_RUNTIME" != 1 ]; then
-        gbm_steamrt_workaround
     fi
 
     run_in_prefix() {
@@ -199,7 +229,8 @@ setup_steam() {
     fi
 
     if [[ ! "$1" == */proton ]] && [ "$steam_runtime" = 1 ]; then
-        gbm_steamrt_workaround
+        runtimepath="$(echo "$STEAM_COMPAT_TOOL_PATHS" | cut -d: -f2)"
+        gbm_steamrt_workaround "$runtimepath"
     fi
 
     log "Steam Proton launch command: ${launch_cmd[@]}"
