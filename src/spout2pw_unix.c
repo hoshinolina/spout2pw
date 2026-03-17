@@ -87,7 +87,6 @@ struct source {
     uint32_t height;
     bool update;
     bool dead;
-    bool layout_transitioned;
 };
 
 static NTSTATUS errno_to_status(int err) {
@@ -789,6 +788,7 @@ static int import_texture(struct source *source) {
         .samples = 1,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
@@ -862,8 +862,6 @@ static int import_texture(struct source *source) {
     CHECK_VK_RESULT(vkBindImageMemory(device, source->image, source->mem, 0)) {
         return -EINVAL;
     }
-
-    source->layout_transitioned = false;
 
     TRACE("Texture import OK\n");
 
@@ -992,32 +990,35 @@ static NTSTATUS run_source(void *args) {
             goto cont;
         }
 
-        if (!source->layout_transitioned) {
-            VkImageMemoryBarrier barrier = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-                .srcQueueFamilyIndex = queueFamilyIndex,
-                .dstQueueFamilyIndex = queueFamilyIndex,
-                .image = source->image,
-                .subresourceRange =
-                    {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel = 0,
-                        .levelCount = 1,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1,
-                    },
-            };
+        /*
+         * See: https://github.com/KhronosGroup/Vulkan-Docs/issues/2652
+         * GENERAL -> GENERAL layout transition is correct for external images
+         * VK_QUEUE_FAMILY_EXTERNAL synchronizes with external producer
+         * (though dxvk does not do the queue thing itself...)
+         */
+        VkImageMemoryBarrier barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+            .dstQueueFamilyIndex = queueFamilyIndex,
+            .image = source->image,
+            .subresourceRange =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+        };
 
-            vkCmdPipelineBarrier(source->commandBuffer,
-                                 VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-                                 VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, NULL,
-                                 0, NULL, 1, &barrier);
-            source->layout_transitioned = true;
-        }
+        vkCmdPipelineBarrier(source->commandBuffer,
+                             VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                             VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, NULL, 0,
+                             NULL, 1, &barrier);
 
         VkImageBlit region = {
             .srcSubresource =
