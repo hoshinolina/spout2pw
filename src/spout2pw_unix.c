@@ -87,6 +87,7 @@ struct source {
     uint32_t height;
     bool update;
     bool dead;
+    bool layout_transitioned;
 };
 
 static NTSTATUS errno_to_status(int err) {
@@ -862,6 +863,8 @@ static int import_texture(struct source *source) {
         return -EINVAL;
     }
 
+    source->layout_transitioned = false;
+
     TRACE("Texture import OK\n");
 
     return 0;
@@ -989,6 +992,33 @@ static NTSTATUS run_source(void *args) {
             goto cont;
         }
 
+        if (!source->layout_transitioned) {
+            VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+                .srcQueueFamilyIndex = queueFamilyIndex,
+                .dstQueueFamilyIndex = queueFamilyIndex,
+                .image = source->image,
+                .subresourceRange =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+            };
+
+            vkCmdPipelineBarrier(source->commandBuffer,
+                                 VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                                 VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, NULL,
+                                 0, NULL, 1, &barrier);
+            source->layout_transitioned = true;
+        }
+
         VkImageBlit region = {
             .srcSubresource =
                 {
@@ -1009,7 +1039,7 @@ static NTSTATUS run_source(void *args) {
         };
 
         vkCmdBlitImage(source->commandBuffer, source->image,
-                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
+                       VK_IMAGE_LAYOUT_GENERAL, image,
                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region,
                        VK_FILTER_NEAREST);
 
