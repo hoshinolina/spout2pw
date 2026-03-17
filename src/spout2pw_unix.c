@@ -252,7 +252,7 @@ vulkan_message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
 }
 
 static bool getflag(const char *name) {
-    const char *val = getenv("SPOUT2PW_VALIDATION");
+    const char *val = getenv(name);
 
     if (!val)
         return false;
@@ -552,13 +552,35 @@ static NTSTATUS startup(void *args) {
         }
     }
 
-    int ret = funnel_init(&funnel);
+    int ret = funnel_new(&funnel);
+    if (ret) {
+        ERROR_MSG("libfunnel initialization failed: %d", ret);
+        return errno_to_status(-ret);
+    }
+
+    const char *appname = getenv("SPOUT2PW_APPNAME");
+    if (appname && appname[0]) {
+        funnel_set_app_name(funnel, appname);
+
+        char *appid;
+        assert(asprintf(&appid, "yt.lina.spout2pw.%s", appname));
+        funnel_set_app_id(funnel, appid);
+        free(appid);
+    } else {
+        ret = funnel_set_app_name(funnel, "Spout2PW");
+        assert(ret == 0);
+
+        ret = funnel_set_app_id(funnel, "yt.lina.spout2pw");
+        assert(ret == 0);
+    }
+
+    ret = funnel_connect(funnel);
     if (ret) {
         if (ret == -ECONNREFUSED) {
             ERROR_MSG("Failed to connect to PipeWire");
             return STATUS_PORT_CONNECTION_REFUSED;
         }
-        ERROR_MSG("libfunnel initialization failed: %d", ret);
+        ERROR_MSG("PipeWire initialization failed: %d", ret);
         return errno_to_status(-ret);
     }
 
@@ -598,6 +620,11 @@ static NTSTATUS create_source(void *args) {
     if (ret) {
         ERROR_MSG("Failed to set up Vulkan for stream");
         goto free_stream;
+    }
+
+    const char *instance_name = getenv("SPOUT2PW_INSTANCE");
+    if (instance_name && instance_name[0]) {
+        funnel_stream_set_instance(stream, instance_name, true);
     }
 
     ret = funnel_stream_set_mode(stream, FUNNEL_SYNCHRONOUS);

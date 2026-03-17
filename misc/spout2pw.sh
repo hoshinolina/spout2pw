@@ -236,6 +236,14 @@ setup_umu() {
         wineprefix="$home/Games/umu/umu-default/"
     fi
 
+    if [ -z "$SPOUT2PW_INSTANCE" ]; then
+        if [ ! -z "$GAMEID" ]; then
+            export SPOUT2PW_INSTANCE="$GAMEID"
+        elif [ ! -z "$WINEPREFIX" ]; then
+            export SPOUT2PW_INSTANCE="$(basename "$WINEPREFIX")"
+        fi
+    fi
+
     run_in_prefix() {
         log "run_in_prefix: $@"
 
@@ -278,6 +286,14 @@ setup_steam() {
         log "run_in_prefix: $@"
         "${launch_cmd[@]}" run "$@"
     }
+
+    if [ -z "$SPOUT2PW_INSTANCE" ]; then
+        if [ ! -z "$STEAM_COMPAT_INSTALL_PATH" ]; then
+            export SPOUT2PW_INSTANCE="$(basename "$STEAM_COMPAT_INSTALL_PATH")"
+        elif [ ! -z "$STEAM_COMPAT_APP_ID" ]; then
+            export SPOUT2PW_INSTANCE="Spout2PW-$STEAM_COMPAT_APP_ID"
+        fi
+    fi
 }
 
 usage() {
@@ -424,6 +440,9 @@ main() {
         *)
             fatal "Unknown command: $verb. spout2pw only supports Steam/Proton and umu-run."
     esac
+
+    log "App name: ${SPOUT2PW_APPNAME:-Spout2PW}"
+    log "Instance name: $SPOUT2PW_INSTANCE"
 
     validate_paths
     prepare_proton
