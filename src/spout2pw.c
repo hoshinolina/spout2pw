@@ -362,9 +362,9 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
     TRACE("SampleDesc     = %d, %d\n", metadata.SampleDesc.Count,
           metadata.SampleDesc.Quality);
     TRACE("Usage          = %d\n", metadata.Usage);
-    TRACE("BindFlags      = %d\n", metadata.BindFlags);
-    TRACE("CPUAccessFlags = %d\n", metadata.CPUAccessFlags);
-    TRACE("MiscFlags      = %d\n", metadata.MiscFlags);
+    TRACE("BindFlags      = 0x%x\n", metadata.BindFlags);
+    TRACE("CPUAccessFlags = 0x%x\n", metadata.CPUAccessFlags);
+    TRACE("MiscFlags      = 0x%x\n", metadata.MiscFlags);
     TRACE("TextureLayout  = %d\n", metadata.TextureLayout);
 
     // Sanity check
