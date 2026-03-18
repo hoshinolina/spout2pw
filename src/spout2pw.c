@@ -285,8 +285,8 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
 
     HANDLE share_handle = info.shareHandle;
 
-    TRACE("Sender %dx%d fmt=%d handle=0x%lx usage=0x%x changed=%d\n",
-          info.width, info.height, info.format,
+    TRACE("Sender %s: %dx%d fmt=%d handle=0x%lx usage=0x%x changed=%d\n",
+          receiver->name, info.width, info.height, info.format,
           (long)(intptr_t)info.shareHandle, info.usage, info.changed);
 
     ret.width = info.width;
@@ -330,7 +330,7 @@ static struct source_info get_receiver_info(struct receiver *receiver) {
     ret.format = info.format;
     ret.usage = info.usage;
 
-    WARN("Update DX Texture\n");
+    TRACE("Update DX Texture\n");
     if (!SpoutDXToCUpdateDXTexture(spout, &info)) {
         WARN("Failed to update DX texture\n");
         ret.flags |= RECEIVER_TEXTURE_INVALID;
@@ -386,7 +386,8 @@ no_metadata:
         goto no_resource_size;
     }
 
-    TRACE("Resource Size  = 0x%llx\n", (long long)shared_resource_info.resource_size);
+    TRACE("Resource Size  = 0x%llx\n",
+          (long long)shared_resource_info.resource_size);
 
     ret.resource_size = shared_resource_info.resource_size;
 
