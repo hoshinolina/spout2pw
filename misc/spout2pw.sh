@@ -263,8 +263,10 @@ setup_steam() {
 
     launch_cmd=()
     steam_runtime=0
+
+    log "Args: $*"
+
     for arg in "$@"; do
-        log "Arg: $arg"
         launch_cmd+=("$arg")
 
         [[ "$arg" == *SteamLinuxRuntime* ]] && steam_runtime=1
