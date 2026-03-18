@@ -386,6 +386,8 @@ no_metadata:
         goto no_resource_size;
     }
 
+    TRACE("Resource Size  = 0x%llx\n", (long long)shared_resource_info.resource_size);
+
     ret.resource_size = shared_resource_info.resource_size;
 
 no_resource_size:
