@@ -257,6 +257,10 @@ setup_steam() {
     wineprefix="$STEAM_COMPAT_DATA_PATH/pfx"
     protonpath="$(echo "$STEAM_COMPAT_TOOL_PATHS" | cut -d: -f1)"
 
+    set | grep '^STEAM' | while read a; do
+        log "$a"
+    done
+
     launch_cmd=()
     steam_runtime=0
     for arg in "$@"; do
