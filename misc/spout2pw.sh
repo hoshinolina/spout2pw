@@ -362,7 +362,7 @@ prepare_prefix() {
     # Make sure spout2pw does not start up during the install, as it could lock the file.
     [ -e "$system32/spout2pw.exe" ] && rm -f "$system32/spout2pw.exe"
     
-    run_in_prefix cmd /c "rundll32 setupapi.dll,InstallHinfSection DefaultInstall 128 Z:${spout2pw//\//\\}\\spout2pw.inf" || fatal "Installation failed"
+    run_in_prefix cmd.exe /c "rundll32 setupapi.dll,InstallHinfSection DefaultInstall 128 Z:${spout2pw//\//\\}\\spout2pw.inf" || fatal "Installation failed"
 
     check_spout2pw_install || fatal "Installation unsuccessful"
     show_info "Installation successful"
