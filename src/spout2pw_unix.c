@@ -205,6 +205,7 @@ static VkQueue queue = VK_NULL_HANDLE;
 static VkCommandPool commandPool = VK_NULL_HANDLE;
 static uint32_t preferredMemoryTypeBits;
 static char error_msg[1024];
+pthread_mutex_t vk_lock;
 
 struct {
     PFN_vkGetMemoryFdPropertiesKHR vkGetMemoryFdPropertiesKHR;
@@ -266,6 +267,8 @@ static NTSTATUS startup(void *args) {
     startup_params = *params;
 
     VkResult result;
+
+    pthread_mutex_init(&vk_lock, NULL);
 
     {
         VkApplicationInfo appInfo = {0};
@@ -681,7 +684,13 @@ free_source:
 }
 
 static void free_texture(struct source *source) {
+    VkResult result;
+
     TRACE("Freeing texture\n");
+
+    pthread_mutex_lock(&vk_lock);
+    CHECK_VK_RESULT(vkQueueWaitIdle(queue)) {}
+    pthread_mutex_unlock(&vk_lock);
 
     if (source->image != VK_NULL_HANDLE)
         vkDestroyImage(device, source->image, NULL);
@@ -1076,11 +1085,14 @@ static NTSTATUS run_source(void *args) {
 
         TRACE("run_source(): Submitting\n");
 
+        pthread_mutex_lock(&vk_lock);
         CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence)) {
+            pthread_mutex_unlock(&vk_lock);
             unlock_texture(source->receiver);
             funnel_stream_return(source->stream, buf);
             goto cont;
         }
+        pthread_mutex_unlock(&vk_lock);
 
         TRACE("run_source(): Enqueueing\n");
 
@@ -1092,7 +1104,9 @@ static NTSTATUS run_source(void *args) {
 
         TRACE("run_source(): Wait for idle\n");
 
+        pthread_mutex_lock(&vk_lock);
         CHECK_VK_RESULT(vkQueueWaitIdle(queue)) {}
+        pthread_mutex_unlock(&vk_lock);
 
         TRACE("run_source(): Unlock\n");
 
@@ -1106,18 +1120,30 @@ static NTSTATUS run_source(void *args) {
         }
     }
 
-    TRACE("run_source(): exiting\n");
 
-    vkFreeCommandBuffers(device, commandPool, 1, &source->commandBuffer);
+    TRACE("run_source(): Exiting, wait for idle\n");
+
+    pthread_mutex_lock(&vk_lock);
+    CHECK_VK_RESULT(vkQueueWaitIdle(queue)) {}
+    pthread_mutex_unlock(&vk_lock);
+
+    TRACE("run_source(): Stopping stream\n");
+
+    funnel_stream_stop(source->stream);
+    funnel_stream_destroy(source->stream);
+
+    TRACE("run_source(): Freeing texture\n");
+
+    free_texture(source);
 
     if (source->info.opaque_fd != -1) {
         close(source->info.opaque_fd);
         source->info.opaque_fd = -1;
     }
 
-    free_texture(source);
-    funnel_stream_stop(source->stream);
-    funnel_stream_destroy(source->stream);
+    TRACE("run_source(): Freeing command buffers\n");
+
+    vkFreeCommandBuffers(device, commandPool, 1, &source->commandBuffer);
 
     source->dead = true;
 
@@ -1181,6 +1207,8 @@ static void teardown(void) {
     GET_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(
         instance, debugMessenger, NULL);
     vkDestroyInstance(instance, NULL);
+
+    pthread_mutex_destroy(&vk_lock);
 
     WINE_TRACE("Teardown finished\n");
 }
