@@ -323,6 +323,7 @@ validate_paths() {
     if [ ! -d "$system32" ]; then
         fatal "Could not find System32 at '$system32'"
     fi
+    syswow64="$cdrive/windows/syswow64"
 
     log "Proton path: $protonpath"
     if [ ! -e "$protonpath/proton" ]; then
@@ -330,25 +331,44 @@ validate_paths() {
     fi
 }
 
+spout2pw_fakedlls="spoutdxtoc.dll spout2pw.exe"
+
 check_spout2pw_install() {
+    check_nonexist() {
+        dst="$1"
+        log "  Checking leftover: $dst"
+        [ ! -e "$dst" ] || return 1
+        return 0
+    }
+    check_fakedll() {
+        dst="$1"
+        log "  Checking fakedll: $dst"
+        [ ! -e "$dst" ] && return 1
+        grep -q "Wine placeholder DLL" "$dst" || return 1
+        return 0
+    }
     check_file() {
         src="$1"
         dst="$2"
-        log "Checking file: $dst"
+        log "  Checking file: $dst"
         [ ! -e "$dst" ] && return 1
         cmp "$src" "$dst" &>/dev/null || return 1
         return 0
     }
 
-    for file in spoutdxtoc.dll spout2pw.exe; do
-        check_file "$spout2pw/spout2pw-dlls/x86_64-windows/$file" "$system32/$file" || return 1
+    log "Checking for spout2pw files"
+
+    for file in $spout2pw_fakedlls; do
+        check_nonexist "$syswow64/$file" || return 1
+        check_fakedll "$system32/$file" || return 1
     done
 
     log "Checking for service"
     if ! grep -q 'Services\\\\Spout2Pw' $wineprefix/system.reg; then
-        log "Service is missing"
+        log "  Service is missing"
         return 1
     fi
+    log "  Service is OK"
 }
 
 prepare_prefix() {
@@ -358,6 +378,11 @@ prepare_prefix() {
     fi
 
     show_info "Installing/updating Spout2PW into Wine prefix..."
+
+    # Delete spurious syswow64 copies
+    for file in $spout2pw_fakedlls; do
+        [ -e "$syswow64/$file" ] && rm -f "$syswow64/$file"
+    done
 
     # Make sure spout2pw does not start up during the install, as it could lock the file.
     [ -e "$system32/spout2pw.exe" ] && rm -f "$system32/spout2pw.exe"
